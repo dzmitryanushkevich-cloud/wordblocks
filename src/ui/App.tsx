@@ -18,7 +18,8 @@ import { Debug } from './Debug.js';
 import { letters, plural } from './plural.js';
 
 const LEVEL_COUNT = 30;
-const CRUMBLE_MS = 640;
+// Рассыпание: 620 мс анимации плюс до 128 мс задержки на дальних плитках.
+const CRUMBLE_MS = 790;
 
 export function App() {
   const dictionary = useMemo(() => getDictionary(), []);
@@ -90,6 +91,7 @@ export function App() {
             ))}
           </div>
           <Board
+            key={game.figureIndex}
             figure={figure}
             selection={game.selection}
             hintCell={game.hintCell}
@@ -112,7 +114,7 @@ export function App() {
             openLevel(game.level.index, nudge);
           }}
         />
-        <span>
+        <span className="figures">
           Фигура {game.figureIndex + 1} из {game.level.figures.length}
         </span>
         <button onClick={() => setGame((g) => (g ? useHint(g) : g))}>подсказка</button>

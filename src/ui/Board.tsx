@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Figure } from '../core/types.js';
+import { outlinePath } from './outline.js';
 
 interface BoardProps {
   figure: Figure;
@@ -17,13 +18,19 @@ interface BoardProps {
  */
 export function Board({ figure, selection, hintCell, crumbling, onPick, onRelease }: BoardProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState({ width: 0, height: 0 });
+  const [box, setBox] = useState({ width: 0, height: 0, cell: 0, gap: 0 });
 
   // Размер плитки задан в CSS через clamp, поэтому шаг сетки измеряем, а не считаем.
   useEffect(() => {
     const node = ref.current;
     if (!node) return;
-    const update = () => setBox({ width: node.clientWidth, height: node.clientHeight });
+    const update = () => {
+      const tile = node.querySelector('.tile');
+      const cell = tile ? tile.getBoundingClientRect().width : 0;
+      const width = node.clientWidth;
+      const gap = figure.width > 1 ? (width - cell * figure.width) / (figure.width - 1) : cell * 0.12;
+      setBox({ width, height: node.clientHeight, cell, gap });
+    };
     update();
     const observer = new ResizeObserver(update);
     observer.observe(node);
@@ -62,6 +69,10 @@ export function Board({ figure, selection, hintCell, crumbling, onPick, onReleas
     if (cell !== undefined) onPick(cell);
   };
 
+  const pitch = box.cell + box.gap;
+  const plate =
+    box.cell > 0 ? outlinePath(figure.cells, pitch, pitch, -box.gap / 2, -box.gap / 2) : '';
+
   const pitchX = box.width / figure.width;
   const pitchY = box.height / figure.height;
   const points = selection
@@ -73,7 +84,7 @@ export function Board({ figure, selection, hintCell, crumbling, onPick, onReleas
 
   return (
     <div
-      className="board"
+      className={crumbling ? 'board crumbling' : 'board'}
       ref={ref}
       style={{
         width: `calc(var(--cell) * ${figure.width} + var(--gap) * ${figure.width - 1})`,
@@ -84,6 +95,13 @@ export function Board({ figure, selection, hintCell, crumbling, onPick, onReleas
       onPointerUp={onRelease}
       onPointerCancel={onRelease}
     >
+      {/* Общая подложка под всеми плитками — фигура читается как одна деталь. */}
+      {plate && (
+        <svg className="plate" width={box.width} height={box.height}>
+          <path d={plate} />
+        </svg>
+      )}
+
       {figure.cells.map((cell, i) => {
         const spread = ((i * 37) % 11) - 5;
         return (
@@ -100,10 +118,10 @@ export function Board({ figure, selection, hintCell, crumbling, onPick, onReleas
             style={{
               left: `calc((var(--cell) + var(--gap)) * ${cell.x})`,
               top: `calc((var(--cell) + var(--gap)) * ${cell.y})`,
-              animationDelay: crumbling ? `${(i % 5) * 28}ms` : undefined,
-              ['--dx' as string]: `${spread * 9}px`,
-              ['--dy' as string]: `${60 + Math.abs(spread) * 6}px`,
-              ['--rot' as string]: `${spread * 12}deg`,
+              animationDelay: crumbling ? `${(i % 5) * 32}ms` : undefined,
+              ['--dx' as string]: `${spread * 16}px`,
+              ['--dy' as string]: `${150 + Math.abs(spread) * 10}px`,
+              ['--rot' as string]: `${spread * 16}deg`,
             }}
           >
             {cell.letter.toUpperCase()}

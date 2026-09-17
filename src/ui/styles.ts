@@ -6,6 +6,7 @@ export const css = `
   --bg: #3f7f68;
   --bg-deep: #35705c;
   --panel: rgba(255, 255, 255, 0.10);
+  --plate: #2b6451;
   --tile: #f7f3dd;
   --tile-edge: #ded8bb;
   --ink: #2c4a3d;
@@ -18,6 +19,11 @@ export const css = `
 }
 
 html, body { margin: 0; height: 100%; }
+
+/* dvh — высота видимой части экрана: панель мобильного браузера её больше не съедает. */
+@supports (height: 100dvh) {
+  html, body { height: 100dvh; }
+}
 
 body {
   background: var(--bg);
@@ -50,6 +56,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 
 .progress-row { display: flex; align-items: center; gap: 10px; }
 .back { padding: 6px 12px; font-size: 15px; line-height: 1; }
+.icon { padding: 6px 10px; font-size: 15px; line-height: 1; }
 
 .track {
   position: relative;
@@ -124,7 +131,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 
 /* ── поле с фигурой ────────────────────────────────────────────────── */
 
-.stage { flex: 1; display: grid; place-items: center; padding: 18px 16px; }
+.stage { flex: 1; display: grid; place-items: center; padding: 18px 16px; overflow: hidden; }
 
 .draft { height: 40px; display: flex; gap: 3px; align-items: center; justify-content: center; }
 .draft span {
@@ -141,7 +148,34 @@ button:disabled { opacity: 0.45; cursor: default; }
 .draft.known span { background: var(--fill); }
 @keyframes pop { from { transform: scale(0.6); } to { transform: none; } }
 
-.board { position: relative; touch-action: none; user-select: none; }
+.board {
+  position: relative;
+  touch-action: none;
+  user-select: none;
+  animation: slide-in 0.42s cubic-bezier(0.18, 0.72, 0.3, 1) both;
+}
+@keyframes slide-in {
+  from { transform: translateX(-130%) rotate(-6deg); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+.board .plate {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.18));
+}
+.board .plate path {
+  fill: var(--plate);
+  stroke: var(--plate);
+  stroke-width: 14;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+.board.crumbling .plate { animation: plate-out 0.34s ease-in forwards; }
+@keyframes plate-out {
+  to { transform: scale(0.94); opacity: 0; }
+}
 .board svg { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
 .board svg polyline { fill: none; stroke: rgba(255, 255, 255, 0.4); stroke-width: 10; stroke-linecap: round; stroke-linejoin: round; }
 
@@ -163,10 +197,31 @@ button:disabled { opacity: 0.45; cursor: default; }
 .tile.hinted { box-shadow: 0 0 0 3px var(--fill); }
 
 .tile.crumble {
-  animation: crumble 0.55s cubic-bezier(0.3, 0, 0.7, 1) forwards;
+  animation: crumble 0.62s forwards;
 }
 @keyframes crumble {
-  to { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(0.7); opacity: 0; }
+  0% {
+    transform: none;
+    opacity: 1;
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+  20% {
+    transform: translateY(-12px) scale(1.05) rotate(calc(var(--rot) / 6));
+    opacity: 1;
+    animation-timing-function: cubic-bezier(0.45, 0, 0.9, 1);
+  }
+  85% {
+    opacity: 0.25;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(0.62);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board { animation-duration: 0.01s; }
+  .tile.crumble { animation-duration: 0.2s; }
 }
 
 .footer {

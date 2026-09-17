@@ -1,4 +1,5 @@
 import type { FoundEntry } from '../game/engine.js';
+import { Fullscreen } from './Fullscreen.js';
 
 interface HudProps {
   letters: number;
@@ -23,6 +24,7 @@ export function Hud({ letters, goal, found, figuresLeft, onMap }: HudProps) {
             {letters} / {goal}
           </div>
         </div>
+        <Fullscreen />
         <div className="deck" title={`осталось фигур: ${figuresLeft}`}>
           <i />
           <i />

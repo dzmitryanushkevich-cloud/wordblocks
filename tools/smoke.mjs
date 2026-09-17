@@ -17,6 +17,13 @@ const errors = [];
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 page.on('pageerror', (e) => errors.push(String(e)));
 
+// Фигура выезжает слева: пока анимация идёт, координаты плиток ещё едут.
+const settleBoard = () =>
+  page.waitForFunction(() => {
+    const board = document.querySelector('.board');
+    return board != null && board.getAnimations().every((a) => a.playState === 'finished');
+  }, null, { timeout: 5000 });
+
 const shot = (name) => page.screenshot({ path: new URL(`../.shots/${name}.png`, import.meta.url).pathname });
 
 await page.goto(new URL('../wordblocks.html', import.meta.url).href);
@@ -25,6 +32,7 @@ await shot('01-map');
 
 await page.click('.level-card >> nth=0');
 await page.waitForSelector('.board');
+await settleBoard();
 
 const tiles = () => page.evaluate(() => {
   const board = document.querySelector('.board');
@@ -96,7 +104,8 @@ for (const i of path.slice(1)) await page.mouse.move(cells[i].cx, cells[i].cy, {
 await shot('02-swipe');
 await page.mouse.up();
 await shot('03-crumble');
-await page.waitForFunction(() => document.querySelector('.footer span').textContent.includes('2 из 5'));
+await page.waitForFunction(() => document.querySelector('.footer .figures').textContent.includes('2 из 5'), null, { timeout: 15000 });
+await settleBoard();
 assert.equal(await progress(), '4 / 16');
 assert.deepEqual(await foundWords(), ['ЗОНА']);
 await shot('04-next-figure');
@@ -109,8 +118,16 @@ await shot('05-hint');
 // 4. Проходим уровень до конца через отладку и смотрим итоги.
 await page.click('.debug-toggle');
 for (let i = 0; i < 4; i++) {
+  const expected = `${i + 3} из 5`;
   await page.click('.debug button >> nth=0');
-  await page.waitForTimeout(750);
+  // Рассыпание плюс выезд следующей фигуры — ждём, пока счётчик фигур сдвинется.
+  await page.waitForFunction(
+    (text) =>
+      document.querySelector('.overlay') != null ||
+      document.querySelector('.footer .figures').textContent.includes(text),
+    expected,
+    { timeout: 15000 },
+  );
 }
 await page.waitForSelector('.overlay');
 const title = await page.textContent('.card h2');
