@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { GameState } from '../game/engine.js';
 import { currentFigure } from '../game/engine.js';
+import { BUILD } from './version.js';
 
 interface DebugProps {
   state: GameState;
@@ -21,6 +22,9 @@ export function Debug({ state, onRegenerate, onSolve }: DebugProps) {
       {open && (
         <div className="debug">
           <div>
+            сборка <code>{BUILD}</code>
+          </div>
+          <div>
             уровень <code>{state.level.index}</code>, сид <code>{state.level.seed}</code>
           </div>
           <div>
@@ -29,7 +33,7 @@ export function Debug({ state, onRegenerate, onSolve }: DebugProps) {
             <code>{state.letters}</code>
           </div>
           <div>
-            фигура <code>{state.figureIndex + 1}</code> из{' '}
+            блок <code>{state.figureIndex + 1}</code> из{' '}
             <code>{state.level.figures.length}</code>, клеток{' '}
             <code>{figure.cells.length}</code>, попыток генерации{' '}
             <code>{figure.attempts}</code>
@@ -38,7 +42,7 @@ export function Debug({ state, onRegenerate, onSolve }: DebugProps) {
             якорь <code>{figure.anchor.toUpperCase()}</code>
           </div>
           <div>
-            слова фигуры:{' '}
+            слова блока:{' '}
             {figure.words.map((w) => (
               <span key={w.word}>
                 <code>{w.word.toUpperCase()}</code>{' '}

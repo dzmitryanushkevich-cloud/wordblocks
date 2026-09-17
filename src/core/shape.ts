@@ -19,6 +19,162 @@ export interface ShapeParams {
 }
 
 /**
+ * Характер формы. Случайный рост всегда даёт округлую кляксу, поэтому
+ * разнообразие приходится задавать намеренно: вытянутые, симметричные,
+ * выращенные из готового силуэта. Вертикальные формы в приоритете —
+ * широкий блок на телефоне приходится ужимать, высокий нет.
+ */
+export type ShapeStyle = 'blob' | 'tall' | 'wide' | 'symmetric' | 'template';
+
+const STYLE_WEIGHTS: [ShapeStyle, number][] = [
+  ['blob', 34],
+  ['tall', 26],
+  ['symmetric', 20],
+  ['template', 15],
+  ['wide', 5],
+];
+
+/** Скелеты силуэтов: из них форма доращивается до нужного размера. */
+const SKELETONS: string[][] = [
+  ['#.#', '#.#', '###'], // подкова
+  ['#..', '#..', '###'], // уголок
+  ['.#.', '###', '.#.'], // крест
+  ['#.#', '###', '#.#'], // буква Н
+  ['###', '.#.', '.#.'], // буква Т
+  ['#.#', '###'], // гребёнка
+  ['.##', '##.', '.##'], // зигзаг
+  ['##.', '.##', '..#'], // лесенка
+];
+
+function fromRows(rows: string[]): Coord[] {
+  const cells: Coord[] = [];
+  rows.forEach((row, y) => [...row].forEach((ch, x) => ch === '#' && cells.push({ x, y })));
+  return cells;
+}
+
+/** Повороты и отражения: один скелет даёт восемь разных силуэтов. */
+function orient(rng: Rng, cells: readonly Coord[]): Coord[] {
+  let out = cells.map((c) => ({ ...c }));
+  if (rng.next() < 0.5) out = out.map((c) => ({ x: -c.x, y: c.y }));
+  const quarter = rng.int(4);
+  for (let i = 0; i < quarter; i++) out = out.map((c) => ({ x: -c.y, y: c.x }));
+  return normalize(out);
+}
+
+/** Доращивание формы до нужного размера с соблюдением габарита. */
+function growFrom(
+  rng: Rng,
+  seed: readonly Coord[],
+  size: number,
+  boxW: number,
+  boxH: number,
+): Coord[] | null {
+  const body = seed.map((c) => ({ ...c }));
+  const taken = new Set(body.map(key));
+  const bbox = () => ({
+    minX: Math.min(...body.map((c) => c.x)),
+    maxX: Math.max(...body.map((c) => c.x)),
+    minY: Math.min(...body.map((c) => c.y)),
+    maxY: Math.max(...body.map((c) => c.y)),
+  });
+
+  let box = bbox();
+  if (box.maxX - box.minX + 1 > boxW || box.maxY - box.minY + 1 > boxH) return null;
+  // Скелет крупнее нужного — подрезаем с краёв, сохраняя связность.
+  while (body.length > size) {
+    const index = body.findIndex((_, i) => isConnectedWithout(body, i));
+    if (index < 0) return null;
+    taken.delete(key(body[index]));
+    body.splice(index, 1);
+  }
+
+  let guard = size * 80;
+  while (body.length < size && guard-- > 0) {
+    const from = rng.pick(body);
+    const dir = rng.pick(DIRECTIONS);
+    const next = { x: from.x + dir.x, y: from.y + dir.y };
+    if (taken.has(key(next))) continue;
+    box = bbox();
+    const width = Math.max(box.maxX, next.x) - Math.min(box.minX, next.x) + 1;
+    const height = Math.max(box.maxY, next.y) - Math.min(box.minY, next.y) + 1;
+    if (width > boxW || height > boxH) continue;
+    body.push(next);
+    taken.add(key(next));
+  }
+  return body.length === size ? normalize(body) : null;
+}
+
+function isConnectedWithout(body: readonly Coord[], skip: number): boolean {
+  const rest = body.filter((_, i) => i !== skip);
+  if (rest.length === 0) return false;
+  const index = new Set(rest.map(key));
+  const seen = new Set<string>([key(rest[0])]);
+  const queue = [rest[0]];
+  while (queue.length) {
+    const c = queue.pop()!;
+    for (const dir of DIRECTIONS) {
+      const next = { x: c.x + dir.x, y: c.y + dir.y };
+      const k = key(next);
+      if (index.has(k) && !seen.has(k)) {
+        seen.add(k);
+        queue.push(next);
+      }
+    }
+  }
+  return seen.size === rest.length;
+}
+
+/** Симметричная форма: строим половину и зеркалим — так рождаются арки и кресты. */
+function symmetricShape(rng: Rng, size: number): Coord[] | null {
+  const half = Math.ceil(size / 2);
+  const grown = growPolyomino(rng, { size: half, boxW: 2, boxH: 6 });
+  if (!grown) return null;
+  const width = Math.max(...grown.map((c) => c.x));
+  const seen = new Set<string>();
+  const cells: Coord[] = [];
+  for (const c of grown) {
+    for (const p of [c, { x: 2 * width + 1 - c.x, y: c.y }]) {
+      if (!seen.has(key(p))) {
+        seen.add(key(p));
+        cells.push(p);
+      }
+    }
+  }
+  while (cells.length > size) {
+    const index = cells.findIndex((_, i) => isConnectedWithout(cells, i));
+    if (index < 0) break;
+    cells.splice(index, 1);
+  }
+  return cells.length === size ? normalize(cells) : null;
+}
+
+/**
+ * Форма нужного размера со случайным характером. Стиль выбирается по весам,
+ * непригодные варианты отсеиваются валидатором блока уровнем выше.
+ */
+export function growShape(rng: Rng, params: ShapeParams): Coord[] | null {
+  const style = rng.weighted(
+    STYLE_WEIGHTS.map(([name]) => name),
+    STYLE_WEIGHTS.map(([, weight]) => weight),
+  );
+
+  switch (style) {
+    case 'tall':
+      return growPolyomino(rng, { size: params.size, boxW: rng.int(2) + 3, boxH: 6 });
+    case 'wide':
+      return growPolyomino(rng, { size: params.size, boxW: 6, boxH: 3 });
+    case 'symmetric':
+      return symmetricShape(rng, params.size);
+    case 'template': {
+      const seed = orient(rng, fromRows(rng.pick(SKELETONS)));
+      return growFrom(rng, seed, params.size, 5, 6);
+    }
+    default:
+      return growPolyomino(rng, params);
+  }
+}
+
+/**
  * Случайный полиомино: растём от стартовой клетки, каждый раз добавляя
  * соседа к уже построенному телу. Габарит ограничен, чтобы фигура
  * оставалась компактной и читалась на экране.
@@ -95,17 +251,36 @@ export function buildAdjacency(body: readonly Coord[]): number[][] {
   });
 }
 
+/** Сколько раз путь меняет направление: прямое слово заметно, извилистое нужно выискивать. */
+export function countTurns(body: readonly Coord[], path: readonly number[]): number {
+  let turns = 0;
+  for (let i = 2; i < path.length; i++) {
+    const a = body[path[i - 2]];
+    const b = body[path[i - 1]];
+    const c = body[path[i]];
+    if (b.x - a.x !== c.x - b.x || b.y - a.y !== c.y - b.y) turns++;
+  }
+  return turns;
+}
+
 /**
  * Случайный простой путь заданной длины (без повторов клеток, только по рёбрам).
- * По такому пути потом выкладывается якорное слово.
+ * По такому пути потом выкладывается якорное слово. Извилистость ограничена:
+ * на ранних уровнях слово должно читаться почти прямой линией.
  */
-export function findPath(rng: Rng, adjacency: readonly number[][], length: number): number[] | null {
+export function findPath(
+  rng: Rng,
+  adjacency: readonly number[][],
+  length: number,
+  body?: readonly Coord[],
+  maxTurns = Infinity,
+): number[] | null {
   if (length > adjacency.length) return null;
   const starts = rng.shuffled(adjacency.map((_, i) => i));
   for (const start of starts) {
     const path = [start];
     const used = new Set<number>([start]);
-    if (walk(rng, adjacency, path, used, length)) return path;
+    if (walk(rng, adjacency, path, used, length, body, maxTurns)) return path;
   }
   return null;
 }
@@ -116,14 +291,20 @@ function walk(
   path: number[],
   used: Set<number>,
   length: number,
+  body?: readonly Coord[],
+  maxTurns = Infinity,
 ): boolean {
   if (path.length === length) return true;
   const options = rng.shuffled(adjacency[path[path.length - 1]]);
   for (const next of options) {
     if (used.has(next)) continue;
     path.push(next);
+    if (body && countTurns(body, path) > maxTurns) {
+      path.pop();
+      continue;
+    }
     used.add(next);
-    if (walk(rng, adjacency, path, used, length)) return true;
+    if (walk(rng, adjacency, path, used, length, body, maxTurns)) return true;
     path.pop();
     used.delete(next);
   }

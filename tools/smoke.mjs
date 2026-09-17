@@ -94,20 +94,27 @@ await swipe(cells, pathFor(cells, cells[0].letter + cells[1].letter) ?? junk);
 assert.equal(await progress(), '0 / 16', 'мусорный свайп не должен давать букв');
 assert.deepEqual(await foundWords(), [], 'мусорный свайп не должен попадать в список');
 
-// 2. Настоящее слово засчитывается мгновенно, фигура рассыпается, приходит следующая.
-const word = 'зона';
+// 2. Настоящее слово засчитывается мгновенно, блок рассыпается, приходит следующий.
+// Слово берём из панели отладки, чтобы тест не зависел от кривой сложности.
+await page.click('.debug-toggle');
+const word = await page.evaluate(() => {
+  const row = [...document.querySelectorAll('.debug div')].find((d) => d.textContent.startsWith('якорь'));
+  return (row?.textContent ?? '').replace('якорь', '').trim().toLowerCase();
+});
+await page.click('.debug-toggle');
 const path = pathFor(cells, word);
-assert.ok(path, 'слово ЗОНА должно лежать в первой фигуре');
+assert.ok(word.length >= 3, 'панель отладки должна показывать якорное слово');
+assert.ok(path, `слово ${word.toUpperCase()} должно лежать в первом блоке`);
 await page.mouse.move(cells[path[0]].cx, cells[path[0]].cy);
 await page.mouse.down();
 for (const i of path.slice(1)) await page.mouse.move(cells[i].cx, cells[i].cy, { steps: 4 });
 await shot('02-swipe');
 await page.mouse.up();
 await shot('03-crumble');
-await page.waitForFunction(() => document.querySelector('.footer .figures').textContent.includes('2 из 5'), null, { timeout: 15000 });
+await page.waitForFunction(() => document.querySelector('.queue-label b').textContent.includes('2 из 5'), null, { timeout: 15000 });
 await settleBoard();
-assert.equal(await progress(), '4 / 16');
-assert.deepEqual(await foundWords(), ['ЗОНА']);
+assert.equal(await progress(), `${word.length} / 16`);
+assert.deepEqual(await foundWords(), [word.toUpperCase()]);
 await shot('04-next-figure');
 
 // 3. Подсказка подсвечивает клетку.
@@ -115,17 +122,17 @@ await page.click('.footer button:not(.ghost):not(.debug-toggle)');
 assert.equal(await page.locator('.tile.hinted').count(), 1, 'подсказка должна подсветить одну плитку');
 await shot('05-hint');
 
-// 4. Проходим уровень до конца через отладку и смотрим итоги.
+// 4. Проходим уровень через отладку. Уровень закрывается сразу, как только исход
+// предрешён, поэтому блоков может быть меньше пяти — ждём окно итогов.
 await page.click('.debug-toggle');
-for (let i = 0; i < 4; i++) {
-  const expected = `${i + 3} из 5`;
+for (let i = 0; i < 5; i++) {
+  if (await page.locator('.overlay').count()) break;
   await page.click('.debug button >> nth=0');
-  // Рассыпание плюс выезд следующей фигуры — ждём, пока счётчик фигур сдвинется.
   await page.waitForFunction(
     (text) =>
       document.querySelector('.overlay') != null ||
-      document.querySelector('.footer .figures').textContent.includes(text),
-    expected,
+      document.querySelector('.queue-label b').textContent.includes(text),
+    `${i + 3} из 5`,
     { timeout: 15000 },
   );
 }
@@ -133,7 +140,8 @@ await page.waitForSelector('.overlay');
 const title = await page.textContent('.card h2');
 const recap = await page.locator('.recap div').count();
 await shot('06-result');
-assert.equal(recap, 5, 'в итогах должно быть пять строк — по одной на фигуру');
+assert.ok(recap >= 1 && recap <= 5, 'в итогах должна быть строка на каждый сыгранный блок');
+assert.equal(title, 'Уровень пройден', 'взяв все якоря, уровень должен быть пройден');
 
 // 5. Прогресс уровня сохраняется и уровень 2 открывается.
 await page.click('.card .ghost');

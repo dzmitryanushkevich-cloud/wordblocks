@@ -5,7 +5,7 @@ import {
   bounds,
   findPath,
   findPathWithin,
-  growPolyomino,
+  growShape,
   isBoring,
 } from './shape.js';
 import { solve } from './solver.js';
@@ -29,16 +29,23 @@ const REPAIR_ROUNDS = 150;
  *    меняем букву в мешающей клетке (кроме клеток якоря и соблазна) и пробуем снова.
  *    Так в фигуре остаётся ровно один осмысленный соблазн, а не россыпь лёгких выходов.
  */
-export function generateFigure(rng: Rng, dictionary: Dictionary, params: FigureParams): Figure | null {
-  const anchors = dictionary.core(params.anchorLength);
+export function generateFigure(
+  rng: Rng,
+  dictionary: Dictionary,
+  params: FigureParams,
+  /** Слова, уже занятые другими блоками уровня: повтор якоря в одном уровне заметен. */
+  used: ReadonlySet<string> = new Set(),
+): Figure | null {
+  const pool = dictionary.core(params.anchorLength, params.anchorPool);
+  const anchors = pool.filter((word) => !used.has(word));
   if (anchors.length === 0) return null;
   let attempts = 0;
 
   for (let shapeTry = 0; shapeTry < SHAPE_ATTEMPTS; shapeTry++) {
-    const body = growPolyomino(rng, params);
+    const body = growShape(rng, params);
     if (!body || isBoring(body)) continue;
     const adjacency = buildAdjacency(body);
-    const anchorPath = findPath(rng, adjacency, params.anchorLength);
+    const anchorPath = findPath(rng, adjacency, params.anchorLength, body, params.maxTurns);
     if (!anchorPath) continue;
 
     for (let anchorTry = 0; anchorTry < ANCHOR_ATTEMPTS; anchorTry++) {
@@ -85,7 +92,8 @@ function plantTemptation(
   protectedCells: Set<number>,
   params: FigureParams,
 ): boolean {
-  const candidates = dictionary.core(params.temptationLength);
+  // Соблазн тоже должен быть ходовым словом, иначе никто на него не клюнет.
+  const candidates = dictionary.core(params.temptationLength, params.anchorPool);
   if (candidates.length === 0) return false;
   const allowed = cells.map((_, i) => i).filter((i) => !protectedCells.has(i));
   if (allowed.length < params.temptationLength) return false;
@@ -117,12 +125,12 @@ function repair(
   const free = cells.map((_, i) => i).filter((i) => !onAnchor.has(i));
   if (free.length === 0) {
     const words = solve(cells, adjacency, dictionary);
-    return accepts(words, anchor, params) ? words : null;
+    return accepts(words, anchor, params, dictionary) ? words : null;
   }
 
   for (let round = 0; round < REPAIR_ROUNDS; round++) {
     const words = solve(cells, adjacency, dictionary);
-    if (accepts(words, anchor, params)) return words;
+    if (accepts(words, anchor, params, dictionary)) return words;
 
     const offender = pickOffender(words, anchor, params);
     let candidates = offender ? offender.path.filter((i) => !onAnchor.has(i)) : [];
@@ -139,12 +147,24 @@ function repair(
   return null;
 }
 
-function accepts(words: WordHit[], anchor: string, params: FigureParams): boolean {
+function accepts(
+  words: WordHit[],
+  anchor: string,
+  params: FigureParams,
+  dictionary: Dictionary,
+): boolean {
   if (!words.some((w) => w.word === anchor)) return false;
   if (words[0].word.length > anchor.length) return false;
   if (words.length > params.maxWords) return false;
-  // В фигуре обязан быть выбор: хотя бы одно слово короче якоря.
-  if (!words.some((w) => w.word.length < anchor.length)) return false;
+  // В блоке обязан быть выбор, и притом настоящий: короткое слово должно быть
+  // узнаваемым, иначе игрок его не заметит и решать ему будет нечего.
+  if (
+    !words.some(
+      (w) => w.word.length < anchor.length && dictionary.isCommon(w.word, params.anchorPool),
+    )
+  ) {
+    return false;
+  }
   const short = words.filter((w) => w.word.length === 3).length;
   return short <= params.maxShortWords;
 }
@@ -181,17 +201,27 @@ export function generateLevel(
   const params = options.params ?? levelParams(levelIndex, options.figureCount ?? 5);
 
   const figures: Figure[] = [];
+  const usedAnchors = new Set<string>();
+
   for (const figureParams of params.figures) {
-    let figure = generateFigure(rng, dictionary, figureParams);
+    let figure = generateFigure(rng, dictionary, figureParams, usedAnchors);
     // Подстраховка: если с заданными параметрами не вышло, ослабляем требования.
     for (let relax = 1; !figure && relax <= 3; relax++) {
-      figure = generateFigure(rng, dictionary, {
-        ...figureParams,
-        maxShortWords: figureParams.maxShortWords + relax,
-        maxWords: figureParams.maxWords + relax,
-      });
+      figure = generateFigure(
+        rng,
+        dictionary,
+        {
+          ...figureParams,
+          maxShortWords: figureParams.maxShortWords + relax,
+          maxWords: figureParams.maxWords + relax,
+          maxTurns: figureParams.maxTurns + relax,
+          anchorPool: figureParams.anchorPool * (1 + relax),
+        },
+        usedAnchors,
+      );
     }
-    if (!figure) throw new Error(`Не удалось сгенерировать фигуру для уровня ${levelIndex}`);
+    if (!figure) throw new Error(`Не удалось сгенерировать блок для уровня ${levelIndex}`);
+    usedAnchors.add(figure.anchor);
     figures.push(figure);
   }
 

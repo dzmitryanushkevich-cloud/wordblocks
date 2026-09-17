@@ -31,6 +31,8 @@ export interface GameState {
   phase: Phase;
   /** Последнее засчитанное слово — для анимации рассыпания. */
   lastWord: string | null;
+  /** Клетки последнего слова: они не рассыпаются, их буквы улетают в список. */
+  lastPath: number[];
 }
 
 export function currentFigure(state: GameState): Figure {
@@ -50,6 +52,7 @@ export function startLevel(level: Level): GameState {
     hintsUsed: 0,
     phase: 'playing',
     lastWord: null,
+    lastPath: [],
   };
 }
 
@@ -111,17 +114,30 @@ export function releaseSelection(state: GameState, dictionary: Dictionary): Rele
       hintCell: null,
       phase: 'crumbling',
       lastWord: word,
+      lastPath: state.selection,
     },
     accepted: true,
     word,
   };
 }
 
-/** Анимация рассыпания закончилась: либо следующая фигура, либо итог уровня. */
+/**
+ * Анимация рассыпания закончилась: либо следующий блок, либо итог уровня.
+ *
+ * Уровень закрывается досрочно в обе стороны. Цель взята — играть дальше нечего,
+ * исход уже известен. Цель недостижима даже при идеальной игре на оставшихся
+ * блоках — тем более: тянуть игрока через заведомо проигранные блоки незачем.
+ */
 export function finishCrumble(state: GameState): GameState {
+  if (state.letters >= state.level.goalLetters) return { ...state, phase: 'won' };
+
   const next = state.figureIndex + 1;
-  if (next >= state.level.figures.length) {
-    return { ...state, phase: state.letters >= state.level.goalLetters ? 'won' : 'lost' };
+  const stillPossible = state.level.figures
+    .slice(next)
+    .reduce((sum, figure) => sum + figure.anchor.length, 0);
+
+  if (next >= state.level.figures.length || state.letters + stillPossible < state.level.goalLetters) {
+    return { ...state, phase: 'lost' };
   }
   return {
     ...state,
@@ -131,6 +147,7 @@ export function finishCrumble(state: GameState): GameState {
     hintCell: null,
     phase: 'playing',
     lastWord: null,
+    lastPath: [],
   };
 }
 
@@ -147,9 +164,9 @@ export function useHint(state: GameState): GameState {
   };
 }
 
-/** Сколько букв ещё можно набрать на оставшихся фигурах при идеальной игре. */
+/** Сколько букв ещё можно набрать на оставшихся блоках при идеальной игре. */
 export function lettersStillAvailable(state: GameState): number {
   return state.level.figures
     .slice(state.figureIndex + (state.phase === 'crumbling' ? 1 : 0))
-    .reduce((sum, f) => sum + f.anchor.length, 0);
+    .reduce((sum, figure) => sum + figure.anchor.length, 0);
 }

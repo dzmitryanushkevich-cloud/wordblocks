@@ -27,8 +27,10 @@ export interface DictionaryData {
 export class Dictionary {
   private readonly root: TrieNode = createNode();
   private readonly valid = new Set<string>();
+  /** Узнаваемые слова по длине, в порядке убывания частоты (индекс = ранг). */
   private readonly coreByLength = new Map<number, string[]>();
   /** Частотность букв, посчитанная по самому словарю: основа «естественной» добивки. */
+  private readonly rank = new Map<string, number>();
   readonly letters: string[] = [];
   readonly letterWeights: number[] = [];
 
@@ -41,8 +43,13 @@ export class Dictionary {
         const bucket = this.coreByLength.get(word.length);
         if (bucket) bucket.push(word);
         else this.coreByLength.set(word.length, [word]);
+        this.rank.set(word, index);
       }
-      for (const ch of word) counts.set(ch, (counts.get(ch) ?? 0) + 1);
+      // Ъ в добивку не берём: слово с ним начаться не может, а в середине он
+      // встречается только в считаных словах — в блоке это мёртвая клетка.
+      for (const ch of word) {
+        if (ch !== 'ъ') counts.set(ch, (counts.get(ch) ?? 0) + 1);
+      }
     });
     for (const [letter, count] of [...counts].sort((a, b) => b[1] - a[1])) {
       this.letters.push(letter);
@@ -84,9 +91,20 @@ export class Dictionary {
     return node.terminal;
   }
 
-  /** Узнаваемые слова заданной длины. */
-  core(length: number): readonly string[] {
-    return this.coreByLength.get(length) ?? [];
+  /**
+   * Узнаваемые слова заданной длины. `maxRank` сужает выбор до самых частотных:
+   * на первых уровнях якорем должно быть бытовое слово, а не ШАРМ или ЛАЖА.
+   */
+  core(length: number, maxRank = Infinity): readonly string[] {
+    const bucket = this.coreByLength.get(length) ?? [];
+    if (maxRank === Infinity) return bucket;
+    const narrowed = bucket.filter((word) => (this.rank.get(word) ?? Infinity) <= maxRank);
+    return narrowed.length > 0 ? narrowed : bucket;
+  }
+
+  /** Узнаваемо ли слово: входит ли оно в самые частотные `maxRank` слов. */
+  isCommon(word: string, maxRank: number): boolean {
+    return (this.rank.get(word) ?? Infinity) <= maxRank;
   }
 
   /** Случайная буква с учётом частотности словаря. */

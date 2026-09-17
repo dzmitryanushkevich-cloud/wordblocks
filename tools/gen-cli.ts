@@ -2,6 +2,7 @@
  * Консольный прогон генератора: печатает фигуры уровня, все спрятанные слова
  * и сводную статистику. Нужен, чтобы оценивать качество контента без интерфейса.
  *
+ *   npm run gen -- balance 10 — отчёт по балансу первых уровней
  *   npm run gen               — уровни 1, 5 и 10 подробно
  *   npm run gen -- 3          — подробно уровень 3
  *   npm run gen -- stats 40   — статистика по 40 уровням без печати фигур
@@ -69,8 +70,49 @@ function printStats(levels: number): void {
   console.log(`Попыток генерации на фигуру: ${(attempts / figures).toFixed(1)}`);
 }
 
+/** Сколько раз путь якорного слова меняет направление: прямое слово найти легче извилистого. */
+function turns(figure: Figure): number {
+  const path = figure.words.find((w) => w.word === figure.anchor)?.path ?? [];
+  let count = 0;
+  for (let i = 2; i < path.length; i++) {
+    const a = figure.cells[path[i - 2]];
+    const b = figure.cells[path[i - 1]];
+    const c = figure.cells[path[i]];
+    if ((b.x - a.x) !== (c.x - b.x) || (b.y - a.y) !== (c.y - b.y)) count++;
+  }
+  return count;
+}
+
+/**
+ * Баланс уровня: что можно набрать при идеальной игре, что нужно для победы
+ * и сколько букв игрок может потерять, прежде чем уровень будет провален.
+ */
+function printBalance(levels: number): void {
+  console.log('\nур  якоря          клеток        слов  поворотов  цель/макс  запас  худший');
+  for (let index = 1; index <= levels; index++) {
+    const level = generateLevel(dictionary, index);
+    const anchors = level.figures.map((f) => f.anchor.length);
+    const sizes = level.figures.map((f) => f.cells.length);
+    const words = level.figures.map((f) => f.words.length);
+    const bends = level.figures.map(turns);
+    // Худший исход: в каждом блоке игрок берёт самое короткое слово.
+    const worst = level.figures.reduce(
+      (sum, f) => sum + Math.min(...f.words.map((w) => w.word.length)),
+      0,
+    );
+    const slack = level.maxLetters - level.goalLetters;
+    console.log(
+      `${String(index).padStart(2)}  ${anchors.join(',')}     ${sizes.join(',')}   ` +
+        `${words.join(',')}   ${bends.join(',')}      ${String(level.goalLetters).padStart(2)}/${level.maxLetters}     ` +
+        `${String(slack).padStart(2)}    ${worst} ${worst >= level.goalLetters ? '(пройдёт)' : '(провал)'}`,
+    );
+  }
+}
+
 const args = process.argv.slice(2);
-if (args[0] === 'stats') {
+if (args[0] === 'balance') {
+  printBalance(Number(args[1] ?? 10));
+} else if (args[0] === 'stats') {
   printStats(Number(args[1] ?? 20));
 } else if (args.length > 0) {
   printLevel(generateLevel(dictionary, Number(args[0])));

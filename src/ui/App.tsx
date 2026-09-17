@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getDictionary } from '../core/loadDictionary.js';
 import { generateLevel } from '../core/generator.js';
 import {
@@ -13,33 +13,62 @@ import {
 } from '../game/engine.js';
 import { loadSave, recordResult, type SaveData } from '../game/storage.js';
 import { Board } from './Board.js';
-import { Hud } from './Hud.js';
+import { Hud, type Flight } from './Hud.js';
 import { Debug } from './Debug.js';
+import { Queue } from './Queue.js';
 import { letters, plural } from './plural.js';
+import { BUILD } from './version.js';
 
 const LEVEL_COUNT = 30;
-// Рассыпание: 620 мс анимации плюс до 128 мс задержки на дальних плитках.
-const CRUMBLE_MS = 790;
+// Слово найдено → клетки слова застывают подсвеченными, вокруг осыпается фигура,
+// и только через эту паузу буквы срываются в список.
+const FREEZE_MS = 620;
+/** Зазор между клетками — такой же, как в Board. */
+const GAP = 6;
+const LETTER_MS = 950;
+const LETTER_STEP_MS = 105;
+/** Сколько держим на экране отвергнутое слово: успеть покраснеть и вздрогнуть. */
+const REJECT_MS = 700;
 
 export function App() {
   const dictionary = useMemo(() => getDictionary(), []);
   const [save, setSave] = useState<SaveData>(loadSave);
   const [game, setGame] = useState<GameState | null>(null);
   const [seedNudge, setSeedNudge] = useState(0);
+  // Откуда летят буквы последнего найденного слова — только для анимации.
+  const [flight, setFlight] = useState<Flight | null>(null);
+  const [departed, setDeparted] = useState(0);
+  // Слово, которого нет в словаре: держим его на экране, пока оно краснеет и дрожит.
+  const [rejected, setRejected] = useState<string | null>(null);
+  const pending = useRef<Flight | null>(null);
 
   const openLevel = useCallback(
     (index: number, nudge = seedNudge) => {
       const level = generateLevel(dictionary, index, { gameSeed: 1 + nudge });
+      setFlight(null);
+      setDeparted(0);
+      setRejected(null);
+      pending.current = null;
       setGame(startLevel(level));
     },
     [dictionary, seedNudge],
   );
 
-  // Когда анимация рассыпания отыграла — переходим к следующей фигуре или к итогу.
+  // Порядок после найденного слова: пауза с подсветкой → полёт букв → следующая фигура.
   useEffect(() => {
     if (game?.phase !== 'crumbling') return;
-    const timer = setTimeout(() => setGame((g) => (g ? finishCrumble(g) : g)), CRUMBLE_MS);
-    return () => clearTimeout(timer);
+    const word = game.lastWord ?? '';
+    const flightMs = LETTER_MS + Math.max(0, word.length - 1) * LETTER_STEP_MS;
+
+    const timers = [setTimeout(() => setFlight(pending.current), FREEZE_MS)];
+    // Каждая буква забирает свою клетку в тот момент, когда сама срывается.
+    for (let i = 0; i < word.length; i++) {
+      timers.push(setTimeout(() => setDeparted(i + 1), FREEZE_MS + i * LETTER_STEP_MS));
+    }
+    timers.push(
+      setTimeout(() => setGame((g) => (g ? finishCrumble(g) : g)), FREEZE_MS + flightMs + 120),
+    );
+    return () => timers.forEach(clearTimeout);
   }, [game?.phase, game?.figureIndex]);
 
   // Итог уровня уходит в сохранение.
@@ -62,14 +91,44 @@ export function App() {
 
   const figure = currentFigure(game);
   const draft = selectionWord(game);
-  const draftKnown = draft.length >= 3 && dictionary.has(draft);
+  const shown = draft || rejected || '';
 
   const takeAnchor = () => {
     const path = figure.words.find((w) => w.word === figure.anchor)?.path ?? [];
+    const tiles = document.querySelectorAll('.board .tile');
+    const size = tiles[0]?.getBoundingClientRect().width ?? 0;
+    const points = path.map((cell) => {
+      const rect = tiles[cell]?.getBoundingClientRect();
+      return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : { x: 0, y: 0 };
+    });
     setGame((current) => {
       if (!current) return current;
-      const withPath = { ...current, selection: path };
-      return releaseSelection(withPath, dictionary).state;
+      const result = releaseSelection({ ...current, selection: path }, dictionary);
+      if (result.accepted) {
+        // Полёт прошлого слова уже отыграл — гасим его, иначе новое слово
+        // сочтут улетевшим и подсветка снимется мгновенно.
+        setFlight(null);
+        pending.current = { word: result.word, points, size, gap: GAP };
+      }
+      return result.state;
+    });
+  };
+
+  const handleRelease = (points: { x: number; y: number }[], size: number) => {
+    setGame((current) => {
+      if (!current) return current;
+      const result = releaseSelection(current, dictionary);
+      if (result.accepted) {
+        setFlight(null);
+        setDeparted(0);
+        setRejected(null);
+        pending.current = { word: result.word, points, size, gap: GAP };
+      } else if (result.word.length >= 2) {
+        // Слова нет в словаре — показываем это отказом, а не молчанием.
+        setRejected(result.word);
+        setTimeout(() => setRejected(null), REJECT_MS);
+      }
+      return result.state;
     });
   };
 
@@ -80,43 +139,58 @@ export function App() {
         goal={game.level.goalLetters}
         found={game.found}
         figuresLeft={game.level.figures.length - game.figureIndex}
+        flight={flight}
+        hideLast={game.phase === 'crumbling' && flight === null}
         onMap={() => setGame(null)}
       />
 
       <div className="stage">
-        <div>
-          <div className={draftKnown ? 'draft known' : 'draft'}>
-            {[...draft].map((letter, i) => (
-              <span key={i}>{letter.toUpperCase()}</span>
-            ))}
-          </div>
-          <Board
-            key={game.figureIndex}
-            figure={figure}
-            selection={game.selection}
-            hintCell={game.hintCell}
-            crumbling={game.phase === 'crumbling'}
-            onPick={(cell) => setGame((g) => (g ? extendSelection(g, cell) : g))}
-            onRelease={() =>
-              setGame((g) => (g ? releaseSelection(g, dictionary).state : g))
-            }
+        <div className={rejected && !draft ? 'draft bad' : 'draft'}>
+          {[...shown].map((letter, i) => (
+            <span key={i}>{letter.toUpperCase()}</span>
+          ))}
+        </div>
+
+        <div className="board-slot">
+          <Queue
+            index={game.figureIndex}
+            total={game.level.figures.length}
+            upcoming={game.level.figures.slice(game.figureIndex + 1)}
           />
+
+          <div className="board-cell">
+            <Board
+              key={game.figureIndex}
+              figure={figure}
+              selection={game.selection}
+              hintCell={game.hintCell}
+              crumbling={game.phase === 'crumbling'}
+              taken={game.lastPath}
+              departed={departed}
+              onPick={(cell) => setGame((g) => (g ? extendSelection(g, cell) : g))}
+              onRelease={handleRelease}
+            />
+          </div>
+
+          <span />
         </div>
       </div>
 
       <div className="footer">
-        <Debug
-          state={game}
-          onSolve={takeAnchor}
-          onRegenerate={() => {
-            const nudge = seedNudge + 1;
-            setSeedNudge(nudge);
-            openLevel(game.level.index, nudge);
-          }}
-        />
-        <span className="figures">
-          Фигура {game.figureIndex + 1} из {game.level.figures.length}
-        </span>
+        {/* Пока открыто окно итогов, панель отладки убираем: она его перекрывает. */}
+        {game.phase === 'won' || game.phase === 'lost' ? (
+          <span />
+        ) : (
+          <Debug
+            state={game}
+            onSolve={takeAnchor}
+            onRegenerate={() => {
+              const nudge = seedNudge + 1;
+              setSeedNudge(nudge);
+              openLevel(game.level.index, nudge);
+            }}
+          />
+        )}
         <button onClick={() => setGame((g) => (g ? useHint(g) : g))}>подсказка</button>
       </div>
 
@@ -142,11 +216,12 @@ function LevelMap({ save, onPick }: LevelMapProps) {
     <div className="screen">
       <h1>WordBlocks</h1>
       <p>
-        В каждой фигуре спрятано несколько слов, но взять можно только одно: как только слово
-        найдено, фигура рассыпается вместе с остальными. Прогресс уровня считается в буквах,
-        поэтому короткое слово — это потерянные буквы. Пять фигур на уровень.
+        В каждом блоке спрятано несколько слов, но взять можно только одно: как только слово
+        найдено, блок рассыпается вместе с остальными. Прогресс уровня считается в буквах,
+        поэтому короткое слово — это потерянные буквы. Пять блоков на уровень.
       </p>
       <p>Слово ведут свайпом по соседним плиткам: вверх, вниз, влево, вправо. Без диагоналей.</p>
+      <p className="build">сборка {BUILD}</p>
       <div className="levels">
         {Array.from({ length: LEVEL_COUNT }, (_, i) => i + 1).map((index) => {
           const result = save.results[index];
@@ -179,13 +254,19 @@ interface ResultProps {
 
 function Result({ state, onRetry, onNext, onMap }: ResultProps) {
   const won = state.phase === 'won';
+  const played = state.outcomes.length;
+  const total = state.level.figures.length;
+  const early = played < total;
+
   return (
     <div className="overlay">
       <div className="card">
         <h2>{won ? 'Уровень пройден' : 'Не хватило букв'}</h2>
         <p>
-          Собрано {letters(state.letters)} из {state.level.goalLetters} нужных. Максимум на этом
-          уровне — {state.level.maxLetters}.
+          Собрано {letters(state.letters)} из {state.level.goalLetters} нужных.
+          {won && early && ` Цель взята на ${played}-м блоке из ${total}.`}
+          {!won && early && ` На оставшихся блоках цели было уже не достать, поэтому уровень
+            закончен досрочно.`}
         </p>
         <div className="recap">
           {state.outcomes.map((outcome, i) => (

@@ -17,6 +17,16 @@ import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
+// Метка сборки в часовом поясе автора — она же показывается в игре.
+const stamp = new Intl.DateTimeFormat('ru-RU', {
+  timeZone: 'Europe/Minsk',
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+}).format(new Date());
+
 const result = await build({
   entryPoints: [join(root, 'src/main.tsx')],
   bundle: true,
@@ -24,7 +34,7 @@ const result = await build({
   format: 'iife',
   target: ['es2020'],
   jsx: 'automatic',
-  define: { 'process.env.NODE_ENV': '"production"' },
+  define: { 'process.env.NODE_ENV': '"production"', __BUILD__: JSON.stringify(stamp) },
   loader: { '.json': 'json' },
   write: false,
   logLevel: 'warning',
@@ -38,6 +48,7 @@ const html = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#3f7f68">
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <title>WordBlocks</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23f7f3dd'/><text x='16' y='23' font-size='20' font-family='sans-serif' font-weight='bold' text-anchor='middle' fill='%232c4a3d'>W</text></svg>">
 </head>
@@ -50,7 +61,7 @@ const html = `<!doctype html>
 
 const out = join(root, 'wordblocks.html');
 writeFileSync(out, html, 'utf8');
-console.log(`wordblocks.html — ${(statSync(out).size / 1024).toFixed(0)} КБ`);
+console.log(`wordblocks.html — ${(statSync(out).size / 1024).toFixed(0)} КБ, сборка ${stamp}`);
 
 // Та же игра под именем index.html — это то, что раздаёт GitHub Pages из папки docs.
 mkdirSync(join(root, 'docs'), { recursive: true });
