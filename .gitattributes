@@ -1,0 +1,14 @@
+# Единый перевод строки в репозитории, в рабочей копии — как принято в системе.
+* text=auto
+
+*.bat text eol=crlf
+*.ts  text eol=lf
+*.tsx text eol=lf
+*.mjs text eol=lf
+*.py  text eol=lf
+*.md  text eol=lf
+
+# Собранная игра и словарь — машинные файлы: в diff они только мешают.
+wordblocks.html          -diff linguist-generated=true
+docs/index.html          -diff linguist-generated=true
+src/data/dictionary.json -diff linguist-generated=true

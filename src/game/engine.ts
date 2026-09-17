@@ -1,0 +1,155 @@
+import type { Dictionary } from '../core/dictionary.js';
+import { buildAdjacency, isValidPath, readWord } from '../core/shape.js';
+import type { Figure, Level } from '../core/types.js';
+
+export type Phase = 'playing' | 'crumbling' | 'won' | 'lost';
+
+export interface FoundEntry {
+  word: string;
+  figureIndex: number;
+}
+
+export interface FigureOutcome {
+  /** Слово, которое игрок взял в этой фигуре. */
+  taken: string;
+  /** Слова, которые в ней были и рассыпались вместе с фигурой. */
+  missed: string[];
+}
+
+export interface GameState {
+  level: Level;
+  figureIndex: number;
+  /** Соседство клеток текущей фигуры — считается один раз на фигуру. */
+  adjacency: number[][];
+  /** Путь, который игрок ведёт прямо сейчас. */
+  selection: number[];
+  found: FoundEntry[];
+  letters: number;
+  outcomes: FigureOutcome[];
+  hintCell: number | null;
+  hintsUsed: number;
+  phase: Phase;
+  /** Последнее засчитанное слово — для анимации рассыпания. */
+  lastWord: string | null;
+}
+
+export function currentFigure(state: GameState): Figure {
+  return state.level.figures[state.figureIndex];
+}
+
+export function startLevel(level: Level): GameState {
+  return {
+    level,
+    figureIndex: 0,
+    adjacency: buildAdjacency(level.figures[0].cells),
+    selection: [],
+    found: [],
+    letters: 0,
+    outcomes: [],
+    hintCell: null,
+    hintsUsed: 0,
+    phase: 'playing',
+    lastWord: null,
+  };
+}
+
+/** Слово, собранное текущим выделением. */
+export function selectionWord(state: GameState): string {
+  return readWord(currentFigure(state).cells, state.selection);
+}
+
+/**
+ * Добавление клетки к выделению во время свайпа.
+ * Возврат на предыдущую клетку снимает последнюю букву — так исправляют ошибку пальцем.
+ */
+export function extendSelection(state: GameState, cell: number): GameState {
+  if (state.phase !== 'playing') return state;
+  const { selection, adjacency } = state;
+  if (selection.length === 0) return { ...state, selection: [cell] };
+  if (selection[selection.length - 1] === cell) return state;
+  if (selection.length >= 2 && selection[selection.length - 2] === cell) {
+    return { ...state, selection: selection.slice(0, -1) };
+  }
+  if (selection.includes(cell)) return state;
+  if (!adjacency[selection[selection.length - 1]].includes(cell)) return state;
+  return { ...state, selection: [...selection, cell] };
+}
+
+export interface ReleaseResult {
+  state: GameState;
+  /** Засчитано ли слово: интерфейс по этому решает, играть ли анимацию. */
+  accepted: boolean;
+  word: string;
+}
+
+/**
+ * Палец отпущен. Слово засчитывается мгновенно, если оно есть в словаре
+ * и в нём не меньше трёх букв. Никаких подтверждений: отпустил — фигура рассыпалась.
+ */
+export function releaseSelection(state: GameState, dictionary: Dictionary): ReleaseResult {
+  if (state.phase !== 'playing') return { state, accepted: false, word: '' };
+  const word = selectionWord(state);
+  const figure = currentFigure(state);
+
+  const valid =
+    word.length >= 3 &&
+    isValidPath(state.adjacency, state.selection) &&
+    dictionary.has(word);
+
+  if (!valid) {
+    return { state: { ...state, selection: [] }, accepted: false, word };
+  }
+
+  const missed = figure.words.map((w) => w.word).filter((w) => w !== word);
+  return {
+    state: {
+      ...state,
+      selection: [],
+      found: [...state.found, { word, figureIndex: state.figureIndex }],
+      letters: state.letters + word.length,
+      outcomes: [...state.outcomes, { taken: word, missed }],
+      hintCell: null,
+      phase: 'crumbling',
+      lastWord: word,
+    },
+    accepted: true,
+    word,
+  };
+}
+
+/** Анимация рассыпания закончилась: либо следующая фигура, либо итог уровня. */
+export function finishCrumble(state: GameState): GameState {
+  const next = state.figureIndex + 1;
+  if (next >= state.level.figures.length) {
+    return { ...state, phase: state.letters >= state.level.goalLetters ? 'won' : 'lost' };
+  }
+  return {
+    ...state,
+    figureIndex: next,
+    adjacency: buildAdjacency(state.level.figures[next].cells),
+    selection: [],
+    hintCell: null,
+    phase: 'playing',
+    lastWord: null,
+  };
+}
+
+/** Подсказка: подсвечиваем первую букву самого длинного слова фигуры. */
+export function useHint(state: GameState): GameState {
+  if (state.phase !== 'playing') return state;
+  const figure = currentFigure(state);
+  const best = figure.words[0];
+  if (!best) return state;
+  return {
+    ...state,
+    hintCell: best.path[0],
+    hintsUsed: state.hintCell === best.path[0] ? state.hintsUsed : state.hintsUsed + 1,
+  };
+}
+
+/** Сколько букв ещё можно набрать на оставшихся фигурах при идеальной игре. */
+export function lettersStillAvailable(state: GameState): number {
+  return state.level.figures
+    .slice(state.figureIndex + (state.phase === 'crumbling' ? 1 : 0))
+    .reduce((sum, f) => sum + f.anchor.length, 0);
+}
