@@ -304,13 +304,23 @@ export function findPath(
    * не понял правила, это не сложность, а путаница.
    */
   forward = false,
+  /**
+   * Нижняя граница извилистости. Прямое слово игрок читает по строке, не ища
+   * его: на первых уровнях это и нужно, дальше — уже скучно. Поворот заставляет
+   * смотреть на блок целиком.
+   */
+  minTurns = 0,
 ): number[] | null {
   if (length > adjacency.length) return null;
   const starts = rng.shuffled(adjacency.map((_, i) => i));
   for (const start of starts) {
     const path = [start];
     const used = new Set<number>([start]);
-    if (walk(rng, adjacency, path, used, length, body, maxTurns, forward)) return path;
+    if (walk(rng, adjacency, path, used, length, body, maxTurns, forward)) {
+      if (!body || minTurns <= 0 || countTurns(body, path) >= minTurns) return path;
+      // Путь нашёлся, но он слишком прямой: пробуем от другой клетки.
+      continue;
+    }
   }
   return null;
 }

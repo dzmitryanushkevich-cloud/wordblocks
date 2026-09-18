@@ -8,7 +8,8 @@
     "gen": "tsx tools/gen-cli.ts",
     "test": "vitest run",
     "smoke": "node tools/smoke.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "audit": "tsx tools/audit.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.3",

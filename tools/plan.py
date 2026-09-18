@@ -115,7 +115,10 @@ pairs = [(a, b) for a, b in itertools.combinations(cat_list, 2)]
 
 profile = {}
 room_of = {}
-shuffler = random.Random(3)
+# Сид перебирается руками: планов много, и среди них есть заметно более ровные.
+# Выбранный проверен аудитом (npm run audit), поэтому зафиксирован.
+SEED = int(__import__('os').environ.get('PLAN_SEED', '3'))
+shuffler = random.Random(SEED)
 for level in range(1, 31):
     depth = depth_of(level)
     need = anchors(level)
@@ -145,7 +148,7 @@ for level in range(1, 31):
         print('нет наборов для уровня', level, depth)
 
 best = None
-rng = random.Random(11)
+rng = random.Random(SEED + 8)
 for _ in range(300):
     used = collections.Counter()
     seen = set()

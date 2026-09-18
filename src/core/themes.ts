@@ -1,7 +1,19 @@
 import type { ThemeContent } from '../content/types.js';
 
-/** Слова категории: свой белый список, частотностью в словаре не проверяется. */
+/**
+ * Слова категории: свой белый список, частотностью в словаре не проверяется.
+ * Вместе с каждым словом идёт его множественное число: ТУФЛИ — такая же обувь,
+ * как ТУФЛЯ, и засчитать их надо одинаково. Прятать генератор продолжает
+ * единственное число — за него отвечает `categoryPool`.
+ */
 export function categoryWords(themes: ThemeContent, id: string): string[] {
+  const singles = (themes.categories[id] ?? '').split(' ').filter(Boolean);
+  const plural = singles.map((word) => themes.plural?.[word]).filter(Boolean) as string[];
+  return [...singles, ...plural];
+}
+
+/** Только единственное число: из этого генератор строит блоки. */
+function singleWords(themes: ThemeContent, id: string): string[] {
   return (themes.categories[id] ?? '').split(' ').filter(Boolean);
 }
 
@@ -81,7 +93,7 @@ export function categoryPool(
     const core = coreWords(themes, category);
     if (core.length > 0) return core;
   }
-  return depth === 'all' ? categoryWords(themes, category) : commonWords(themes, category);
+  return depth === 'all' ? singleWords(themes, category) : commonWords(themes, category);
 }
 
 /**
@@ -101,4 +113,28 @@ export function themeWords(
   depth: PoolDepth = 'all',
 ): string[] {
   return theme.categories.flatMap((id) => categoryPool(themes, id, depth));
+}
+
+/**
+ * Что в уровне засчитывается. Шире, чем то, что генератор прячет: сюда входит
+ * вся категория целиком и множественное число каждого слова. Игрок читает
+ * с блока то, что видит, и собранные ТУФЛИ обязаны считаться так же, как ТУФЛЯ.
+ */
+export function themeScoring(themes: ThemeContent, theme: LevelTheme): string[] {
+  return theme.categories.flatMap((id) => categoryWords(themes, id));
+}
+
+/**
+ * Пары «единственное — множественное» в обе стороны. Нужны генератору: ТУФЛЯ
+ * и ТУФЛИ в одном блоке — это не выбор, а одно и то же слово дважды, и хуже
+ * того, в английском форма длиннее якоря (COCONUT и COCONUTS) и ломает правило
+ * «якорь — самое длинное слово темы».
+ */
+export function siblingForms(themes: ThemeContent): Map<string, string> {
+  const pairs = new Map<string, string>();
+  for (const [single, many] of Object.entries(themes.plural ?? {})) {
+    pairs.set(single, many);
+    pairs.set(many, single);
+  }
+  return pairs;
 }

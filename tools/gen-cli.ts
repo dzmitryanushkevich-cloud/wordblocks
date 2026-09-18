@@ -12,7 +12,7 @@ import { createContent } from '../src/core/content.js';
 import { packById, DEFAULT_PACK } from '../src/content/index.js';
 import { generateLevel } from '../src/core/generator.js';
 import type { Figure, Level } from '../src/core/types.js';
-import { levelTheme, themeWords } from '../src/core/themes.js';
+import { levelTheme, themeScoring } from '../src/core/themes.js';
 
 // Первым аргументом можно указать язык: npm run gen -- en stats 40
 const argv = process.argv.slice(2);
@@ -128,7 +128,7 @@ function printThemes(levels: number): void {
   let total = 0;
   console.log('\nур  тема                      якоря');
   for (let index = 1; index <= levels; index++) {
-    const pool = new Set(themeWords(pack.themes, levelTheme(pack.themes, index)));
+    const pool = new Set(themeScoring(pack.themes, levelTheme(pack.themes, index)));
     const level = generateLevel(content, index);
     total += level.figures.length;
     themed += level.figures.filter((f) => pool.has(f.anchor)).length;

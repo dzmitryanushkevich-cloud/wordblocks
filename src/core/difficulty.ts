@@ -35,6 +35,16 @@ export interface FigureParams {
    * сложности поиска, не считая размера блока.
    */
   maxTurns: number;
+  /** Сколько поворотов путь обязан сделать: прямое слово читается по строке. */
+  minTurns: number;
+  /**
+   * Сколько ложных начал подкладывать: клеток с первой буквой якоря, от которых
+   * слово не собирается. Взгляд цепляется за букву и ведёт не туда — это и есть
+   * запутанность, за которую блок становится трудным, а слова остаются простыми.
+   */
+  falseStarts: number;
+  /** Соблазн обязан пересечь якорь, а не лежать рядом: два слова в одних клетках. */
+  crossing: boolean;
   /**
    * Слово лежит только слева направо и сверху вниз. На первых уровнях, пока
    * игрок не понял правила, зеркальная ЛИСА читается как АСИЛ — это не
@@ -129,6 +139,21 @@ export function levelParams(
         levelIndex <= curve.shapeStages[0] ? 0 : levelIndex <= curve.shapeStages[1] ? 1 : 2,
       temptationLength: clamp(anchorLength - 3, 3, 4),
       maxTurns: plan.turns,
+      // Пока слова лежат по порядку, поворот не требуем: два ограничения сразу
+      // не оставляют генератору выбора. Дальше якорь обязан хотя бы раз свернуть,
+      // а с середины кривой — дважды: прямое слово находится без поиска.
+      // Запутанность растёт отдельно от слов: с пятого уровня якорь обязан
+      // свернуть дважды, дальше трижды. Слова при этом остаются теми же —
+      // трудно становится не читать их, а находить.
+      minTurns:
+        levelIndex <= curve.readableUntil
+          ? 0
+          : levelIndex <= curve.tangleFrom - 1
+            ? 1
+            : Math.min(3, Math.max(2, plan.turns - 1)),
+      falseStarts:
+        levelIndex < curve.tangleFrom ? 0 : levelIndex < curve.tangleFrom + 5 ? 1 : 2,
+      crossing: levelIndex >= curve.tangleFrom,
       anchorPool: plan.pool,
       readable: levelIndex <= curve.readableUntil,
     });

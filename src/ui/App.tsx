@@ -469,11 +469,21 @@ function Result({ ui, state, outcome, leaving, onRetry, onNext }: ResultProps) {
         {won && outcome && <ChestBar outcome={outcome} ui={ui} />}
         {/* На победе всё лишнее убрано: это праздник, а не разбор партии.
             На поражении наоборот — важно понять, чего не хватило. */}
+        {/* На поражении показываем ту же шкалу, что в шапке: словами «не хватило»
+            звучит абстрактно, а полоска сразу показывает, насколько именно. */}
         {!won && (
-          <p className="why-lost">
-            {ui.collected(state.letters, state.level.goalLetters)}
-            {early && ui.lostEarly}
-          </p>
+          <>
+            <div className="track">
+              <i style={{ width: `${Math.min(100, Math.round((state.letters / state.level.goalLetters) * 100))}%` }} />
+              <div className="progress-label">
+                {state.letters} / {state.level.goalLetters}
+              </div>
+            </div>
+            <p className="why-lost">
+              {ui.collected(state.letters, state.level.goalLetters)}
+              {early && ui.lostEarly}
+            </p>
+          </>
         )}
 
         <div className="row">
