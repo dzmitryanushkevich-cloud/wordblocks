@@ -11,7 +11,7 @@ import { solve } from './solver.js';
 import type { FigureParams, LevelParams } from './difficulty.js';
 import { levelParams } from './difficulty.js';
 import type { Cell, Figure, Level, WordHit } from './types.js';
-import { figureLabels, levelTheme, themeWords } from './themes.js';
+import { categoryPool, figureLabels, levelTheme, themeWords } from './themes.js';
 import type { GameContent } from './content.js';
 
 const SHAPE_ATTEMPTS = 60;
@@ -40,12 +40,19 @@ export function generateFigure(
   used: ReadonlySet<string> = new Set(),
   /** Слова темы уровня: из них якорь берут в первую очередь. */
   themePool: readonly string[] = [],
+  /**
+   * Откуда брать якорь, если это не вся тема: на ранних уровнях блоки берут
+   * категории по очереди, и якорь обязан быть из своей. Соблазн при этом можно
+   * взять из всей темы — трёхбуквенных слов в одной категории часто нет вовсе
+   * (у птиц их нет ни одного), а без соблазна блок не собирается.
+   */
+  anchorPool: readonly string[] = themePool,
 ): Figure | null {
   const inTheme = new Set(themePool);
   // Соблазны тоже берём из темы и тоже не повторяем в пределах уровня.
   const temptations = themePool.filter((word) => !used.has(word));
   const free = (length: number): string[] =>
-    temptations.filter((word) => word.length === length);
+    anchorPool.filter((word) => word.length === length && !used.has(word));
 
   // Якорь обязан быть из темы: засчитываются только её слова, и блок с чужим
   // якорем был бы просто непроходимым. Сначала идут слова нужной длины, за ними
@@ -347,14 +354,22 @@ export function generateLevel(
   const theme = levelTheme(pack.themes, levelIndex);
   // Прячем слова по кривой, а засчитываем любые слова темы: если редкое слово
   // сложилось случайно, оно всё равно из категории и обязано считаться.
-  const pool = themeWords(pack.themes, theme, params.commonOnly);
+  const pool = themeWords(pack.themes, theme, params.poolDepth);
   const inTheme = new Set(themeWords(pack.themes, theme));
 
   const figures: Figure[] = [];
   const usedAnchors = new Set<string>();
+  // Блоки берут категории по очереди: первый — из первой (в плане она стоит
+  // более прозрачной), второй — из второй, третий снова из первой. Иначе три
+  // блока подряд оказываются про одно и то же и уровень выглядит однообразным.
+  const byCategory = theme.categories.map((id) =>
+    categoryPool(pack.themes, id, params.poolDepth),
+  );
 
-  for (const figureParams of params.figures) {
-    let figure = generateFigure(rng, dictionary, figureParams, usedAnchors, pool);
+  for (const [figureIndex, figureParams] of params.figures.entries()) {
+    const turn = byCategory[figureIndex % byCategory.length];
+    const ownPool = turn.length >= 4 ? turn : pool;
+    let figure = generateFigure(rng, dictionary, figureParams, usedAnchors, pool, ownPool);
     // Подстраховка: если с заданными параметрами не вышло, ослабляем требования.
     for (let relax = 1; !figure && relax <= 3; relax++) {
       figure = generateFigure(
@@ -369,7 +384,13 @@ export function generateLevel(
         },
         usedAnchors,
         pool,
+        ownPool,
       );
+    }
+    // Одной категории могло не хватить слов нужной длины — тогда берём всю тему:
+    // непроходимый блок хуже смешанной подписи.
+    if (!figure && ownPool !== pool) {
+      figure = generateFigure(rng, dictionary, figureParams, usedAnchors, pool);
     }
     if (!figure) throw new Error(`Не удалось сгенерировать блок для уровня ${levelIndex}`);
     // Подпись блока: какие категории уровня в нём вообще встречаются.

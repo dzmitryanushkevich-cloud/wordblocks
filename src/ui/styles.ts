@@ -29,6 +29,8 @@ export const css = `
   --gold: #ffc93c;
   --gold-deep: #f0a32a;
   --gold-edge: #bf7a14;
+  /* Высота кнопок нижней полосы: копилка и подсказка должны стоять вровень. */
+  --tray-btn: 62px;
   font-family: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
 }
 
@@ -244,18 +246,30 @@ button:disabled { opacity: 0.45; cursor: default; }
   /* Поле ужимается, когда список слов разрастается: иначе оно распирает страницу. */
   min-height: 0;
   display: grid;
+  /* Первая строка забирает весь свободный остаток, вторая равна блоку с подписью.
+     Собираемое слово висит в этом остатке по центру — между шкалой цели сверху
+     и подписью категорий снизу; прижатое к какому-нибудь краю, оно читается
+     как часть шкалы или как часть подписи. */
   grid-template-rows: 1fr auto;
   justify-items: center;
-  padding: 12px 12px clamp(28px, 5.6vh, 56px);
+  /* Сверху отступа нет намеренно: он оказывался вне строки со словом, и слово
+     вставало на 12 пикселей ниже середины — между шкалой и подписью зазоры
+     переставали быть равными. */
+  padding: 0 12px clamp(28px, 5.6vh, 56px);
   overflow: hidden;
 }
 /* Нижняя часть поля: подпись категорий и сам блок, во всю ширину экрана. */
+/* Блок прижат к низу: до него дотягивается палец, и от блока к блоку он
+   не прыгает по вертикали. Пустое место собирается над ним, а не под ним —
+   там живёт собираемое слово. */
 .board-slot {
   align-self: end;
   display: grid;
   justify-items: center;
   width: 100%;
-  row-gap: 32px;
+  /* Подпись стоит над блоком на высоту собственной строки: вплотную она
+     читается как часть блока, а не как его имя. */
+  row-gap: 62px;
 }
 /* Отступ сверху держит фигуру на прежней высоте, освобождая место очереди. */
 .board-cell { padding-top: 0; }
@@ -305,13 +319,141 @@ button:disabled { opacity: 0.45; cursor: default; }
   padding: 0 8px 24px 12px;
 }
 
+/* Слева в полосе два элемента: копилка и подсказка. Копилка первая, потому что
+   она меньше и реже нужна, а подсказка должна остаться под большим пальцем. */
+.tray-left {
+  /* Группа занимает всю левую колонку: копилка прижата к краю экрана,
+     а подсказка встаёт по центру промежутка между нею и счётчиком блоков. */
+  justify-self: stretch;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+/* Копилка слов не из темы: звезда с числом найденного на этом уровне. */
+.bonus {
+  position: relative;
+  padding: 0;
+  width: var(--tray-btn);
+  height: var(--tray-btn);
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, #5aa0e8, #2f6fc0);
+  box-shadow: 0 4px 0 #1f4f8f, 0 6px 12px rgba(6, 22, 48, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  color: #fff3c4;
+}
+.bonus:active { box-shadow: 0 1px 0 #1f4f8f, 0 2px 6px rgba(6, 22, 48, 0.35); }
+.bonus svg.star-icon {
+  width: 27px;
+  height: 27px;
+  filter: drop-shadow(0 1px 1px rgba(8, 40, 80, 0.45));
+}
+/* Число найденного — на уголке, как счётчик непрочитанного. */
+.bonus b {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--gold), var(--gold-deep));
+  color: #5a3c08;
+  font-size: 13px;
+  line-height: 21px;
+  text-shadow: none;
+  box-shadow: 0 2px 0 var(--gold-edge);
+}
+.bonus.bump { animation: bonus-bump 0.6s cubic-bezier(0.2, 0.8, 0.3, 1); }
+@keyframes bonus-bump {
+  0% { transform: none; }
+  30% { transform: scale(1.2) rotate(-6deg); }
+  100% { transform: none; }
+}
+
+/* Окно копилки: тот же картон, что у итогов уровня. */
+.bonus-card { gap: 14px; }
+.bonus-here {
+  background: var(--panel-deep);
+  border: 1px solid var(--edge);
+  border-radius: 16px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  min-height: 112px;
+}
+.bonus-here > span {
+  font-size: 14px;
+  font-weight: 700;
+  opacity: 0.75;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.bonus-empty { margin: 0; font-size: 14px; line-height: 1.45; opacity: 0.75; }
+/* Слов за уровень бывает и десяток: список прокручивается внутри окна,
+   а не распирает карточку. */
+.bonus-words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-content: flex-start;
+  max-height: 156px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.bonus-words i {
+  font-style: normal;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  padding: 5px 10px;
+  border-radius: 10px;
+  background: var(--tile);
+  color: var(--ink);
+  box-shadow: 0 2px 0 var(--tile-edge);
+}
+.debug code.alien { color: #ffd98a; opacity: 0.85; }
+/* Буквы, летящие в копилку: живут поверх всего и не ловят касания. */
+.bonus-flight {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+}
+.bonus-flight span {
+  position: fixed;
+  transform-origin: center;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  font-weight: 700;
+  background: linear-gradient(180deg, var(--gold), var(--gold-deep));
+  color: #5a3c08;
+  box-shadow: 0 3px 0 var(--gold-edge), 0 6px 12px rgba(8, 40, 80, 0.35);
+  margin-left: -0.5px;
+  translate: -50% -50%;
+}
+@keyframes bonus-fly {
+  0% { transform: none; opacity: 1; }
+  65% { opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) scale(0.3); opacity: 0; }
+}
+
+.bonus-prize { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #ffe9a8; }
+
 .hint {
-  justify-self: start;
+  /* Автоматические поля с обеих сторон и центруют кнопку в остатке. */
+  margin: 0 auto;
   display: grid;
   justify-items: center;
+  align-content: center;
   gap: 1px;
   width: 78px;
-  padding: 8px 2px 7px;
+  height: var(--tray-btn);
+  padding: 4px 2px;
   border-radius: 18px;
   font-size: 12px;
   font-weight: 700;
@@ -387,11 +529,18 @@ button:disabled { opacity: 0.45; cursor: default; }
   height: calc(var(--h) * var(--s, 1));
 }
 .thumb path {
-  fill: var(--tile);
-  stroke: var(--rim);
-  stroke-width: 0.16;
   stroke-linejoin: round;
   paint-order: stroke;
+}
+.thumb .body {
+  fill: var(--tile);
+  stroke: var(--tile);
+  stroke-width: 0.5;
+}
+.thumb .rim {
+  fill: var(--rim);
+  stroke: var(--rim);
+  stroke-width: 0.76;
 }
 /* Очередь подъезжает справа, ближняя миниатюра ещё и подрастает. */
 @keyframes queue-in {
@@ -408,8 +557,9 @@ button:disabled { opacity: 0.45; cursor: default; }
 
 /* Собираемое слово — такая же деталь, как блок: плитки встык, одной полосой. */
 .draft {
-  align-self: end;
-  margin-bottom: 26px;
+  position: relative;
+  align-self: center;
+  margin: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -433,14 +583,17 @@ button:disabled { opacity: 0.45; cursor: default; }
   .word span { width: clamp(15px, 5.6vw, 22px); height: clamp(17px, 6.2vw, 25px); font-size: clamp(10px, 3.8vw, 15px); }
   .draft { min-height: 54px; margin-bottom: 16px; }
   .draft span { width: 44px; height: 54px; font-size: 26px; }
-  .board-slot { row-gap: 20px; }
+  .board-slot { row-gap: 44px; }
   .block-labels { min-height: 26px; font-size: clamp(17px, 5vw, 22px); }
   .stage { padding-bottom: clamp(16px, 3vh, 28px); }
   .tray { padding-bottom: 14px; }
 }
 
-.draft span:first-child { border-radius: 15px 0 0 15px; }
-.draft span:last-child { border-radius: 0 15px 15px 0; }
+/* Края слова скругляем по первой и последней БУКВЕ, а не по первому и последнему
+   ребёнку: под словом лежит ещё подпись «в копилку», и с :last-child последняя
+   буква теряла скругление — слово выглядело обрезанным. */
+.draft span:first-of-type { border-radius: 15px 0 0 15px; }
+.draft span:last-of-type { border-radius: 0 15px 15px 0; }
 .draft span:only-child { border-radius: 15px; }
 
 /* Слова нет в словаре: полоса краснеет и мотает головой. */
@@ -462,10 +615,24 @@ button:disabled { opacity: 0.45; cursor: default; }
     draft-out 0.22s ease-in 0.46s both;
 }
 .draft.alien span {
-  background: #e8d79a;
-  color: #6a5620;
-  box-shadow: 0 4px 0 #cbb87c;
+  /* Слово не из темы теперь не «отказ», а находка в копилку — поэтому золото,
+     а не тусклая горчица: игрок должен видеть, что слово зачтено куда-то. */
+  background: linear-gradient(180deg, var(--gold), var(--gold-deep));
+  color: #5a3c08;
+  box-shadow: 0 4px 0 var(--gold-edge);
   animation: none;
+}
+/* Подпись под золотым словом: куда оно ушло. Без неё золото читается как ошибка. */
+.draft .kept {
+  position: absolute;
+  top: 100%;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffe9a8;
+  text-shadow: 0 2px 4px rgba(8, 40, 80, 0.6);
 }
 
 @keyframes shake {
@@ -756,6 +923,16 @@ button:disabled { opacity: 0.45; cursor: default; }
   place-items: center;
   padding: 18px;
   animation: fade 0.2s ease-out;
+}
+/* Уход окна итогов: гаснет вместе с карточкой, и только потом меняется уровень. */
+.overlay.out {
+  animation: fade 0.22s ease-in reverse both;
+  pointer-events: none;
+}
+.overlay.out .card { animation: card-out 0.22s ease-in both; }
+@keyframes card-out {
+  from { transform: none; opacity: 1; }
+  to { transform: translateY(12px) scale(0.96); opacity: 0; }
 }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 .card {

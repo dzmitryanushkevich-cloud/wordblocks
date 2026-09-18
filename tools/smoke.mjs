@@ -90,11 +90,59 @@ const foundWords = () => page.evaluate(() =>
   [...document.querySelectorAll('.word')].map((w) => w.textContent));
 
 // 1. Неверное слово не засчитывается и фигура остаётся на месте.
+// Свайп ведём по двум соседним клеткам и без промежуточных шагов: с шагами
+// указатель задевает третью плитку и может сложить настоящее слово — тест
+// на этом падал, когда в блоке первого уровня оказался КОТ.
 let cells = await tiles();
-const junk = [0, cells.findIndex((_, i) => i > 0)];
-await swipe(cells, pathFor(cells, cells[0].letter + cells[1].letter) ?? junk);
-assert.equal(await progress(), '0 / 16', 'мусорный свайп не должен давать букв');
-assert.deepEqual(await foundWords(), [], 'мусорный свайп не должен попадать в список');
+const junkPath = (() => {
+  const at = new Map(cells.map((t, i) => [`${t.gx},${t.gy}`, i]));
+  for (let i = 0; i < cells.length; i++) {
+    for (const [dx, dy] of [[1, 0], [0, 1]]) {
+      const n = at.get(`${cells[i].gx + dx},${cells[i].gy + dy}`);
+      if (n !== undefined) return [i, n];
+    }
+  }
+  return [0, 1];
+})();
+await page.mouse.move(cells[junkPath[0]].cx, cells[junkPath[0]].cy);
+await page.mouse.down();
+await page.mouse.move(cells[junkPath[1]].cx, cells[junkPath[1]].cy);
+await page.mouse.up();
+assert.equal(await progress(), '0 / 16', 'свайп из двух букв не должен давать букв');
+assert.deepEqual(await foundWords(), [], 'свайп из двух букв не должен попадать в список');
+
+// 1.5. Слово не из темы: блок стоит, а слово уходит в копилку.
+await page.click('.debug-toggle');
+const alien = await page.evaluate(() => {
+  const node = document.querySelector('.debug code.alien');
+  return (node?.textContent ?? '').trim().toLowerCase();
+});
+await page.click('.debug-toggle');
+if (alien.length < 3) {
+  console.log('в первом блоке нет слов не из темы — проверку копилки пропускаем');
+}
+if (alien.length >= 3) {
+  const cellsNow = cells;
+  const alienPath = pathFor(cellsNow, alien);
+  if (alienPath) {
+    const lettersBefore = await progress();
+    await swipe(cellsNow, alienPath);
+    await page.waitForTimeout(400);
+    assert.equal(await progress(), lettersBefore, 'слово не из темы не должно давать букв');
+    assert.equal(
+      await page.textContent('.bonus b'),
+      '1',
+      'слово не из темы должно попасть в копилку',
+    );
+    await page.click('.bonus');
+    const listed = await page.evaluate(() =>
+      [...document.querySelectorAll('.bonus-words i')].map((n) => n.textContent.toLowerCase()));
+    assert.ok(listed.includes(alien), `копилка должна показывать ${alien.toUpperCase()}`);
+    await shot('05b-bonus');
+    await page.click('.bonus-card .big');
+    await page.waitForTimeout(200);
+  }
+}
 
 // 2. Настоящее слово засчитывается мгновенно, блок рассыпается, приходит следующий.
 // Слово берём из панели отладки, чтобы тест не зависел от кривой сложности.

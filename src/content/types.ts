@@ -27,6 +27,14 @@ export interface ThemeContent {
   common: Record<string, string>;
   /** Семейство → входящие в него категории. Показывается на карточке уровня. */
   families: Record<string, string[]>;
+  /** Прозрачность категории: 1 — предметы из детского словаря, 3 — абстрактное.
+      Данные для скрипта, который считает план: ранние уровни берут только
+      первый ярус. В игре не читается. */
+  clarity: Record<string, number>;
+  /** Ядро категории: слова, которые называют первыми. Ими прячутся первые уровни —
+      частотность в субтитрах тут не помощник (ЗАЯЦ и БЕЛКА в неё не попадают вовсе,
+      а БЫК и ЛОСЬ попадают), поэтому список ручной. */
+  core: Record<string, string>;
   /** Тема каждого уровня. Когда список кончается, он идёт по кругу. */
   /** Пары категорий по уровням. Семейства тут нет намеренно: пара берётся
       из разных семейств, и одного имени у неё быть не может. */
@@ -72,6 +80,8 @@ export interface CurveContent {
     short: number;
   };
   /** До какого уровня прячем только ходовые слова категорий. */
+  /** До какого уровня прячем только ядро категорий. */
+  coreUntil: number;
   commonUntil: number;
   /** До каких уровней форма остаётся простой, а потом без скелетов. */
   shapeStages: [number, number];
@@ -108,6 +118,17 @@ export interface UiStrings {
   lostEarly: string;
   next: string;
   retry: string;
+  /** Копилка слов не из темы: заголовок окна, подписи и награда. */
+  bonusTitle: string;
+  bonusButtonTitle: string;
+  bonusHere: string;
+  bonusEmpty: string;
+  bonusTotal: (count: number) => string;
+  bonusProgress: (count: number, goal: number) => string;
+  bonusPaid: (coins: number) => string;
+  bonusFound: string;
+  bonusAgain: string;
+  bonusClose: string;
 }
 
 export interface LanguagePack {

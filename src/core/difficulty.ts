@@ -1,3 +1,4 @@
+import type { PoolDepth } from './themes.js';
 import type { CurveContent, CurveRow } from '../content/types.js';
 
 export interface FigureParams {
@@ -41,7 +42,8 @@ export interface LevelParams {
   /** Доля от максимума (суммы якорных слов), которую нужно набрать для победы. */
   goalRatio: number;
   /** Прятать только ходовые слова категорий: первые уровни знакомят с игрой. */
-  commonOnly: boolean;
+  /** Насколько глубоко черпаем слова темы: ядро → ходовая часть → вся категория. */
+  poolDepth: PoolDepth;
 }
 
 const clamp = (value: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, value));
@@ -110,5 +112,10 @@ export function levelParams(curve: CurveContent, levelIndex: number, figureCount
   }
   // До тринадцатого уровня прячем только то, что знают все: редкое слово
   // на старте читается как ошибка игры, а не как задача.
-  return { figures, goalRatio: plan.goal, commonOnly: levelIndex <= curve.commonUntil };
+  // Узнаваемость слов идёт по кривой так же, как длина и форма: сначала только
+  // ядро категории (ВОЛК и ЛИСА, но не ЛОСЬ и БЫК), потом вся ходовая часть,
+  // а редкие слова появляются, когда игрок уже освоился.
+  const poolDepth: PoolDepth =
+    levelIndex <= curve.coreUntil ? 'core' : levelIndex <= curve.commonUntil ? 'common' : 'all';
+  return { figures, goalRatio: plan.goal, poolDepth };
 }

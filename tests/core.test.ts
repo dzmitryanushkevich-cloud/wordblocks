@@ -13,6 +13,8 @@ import {
 import { solve } from '../src/core/solver.js';
 import { generateLevel } from '../src/core/generator.js';
 import { levelParams } from '../src/core/difficulty.js';
+import { extendSelection, releaseSelection, startLevel } from '../src/game/engine.js';
+import { BONUS_GOAL, BONUS_REWARD, collectBonus } from '../src/game/storage.js';
 import type { Cell } from '../src/core/types.js';
 
 const content = createContent(russian);
@@ -24,7 +26,9 @@ describe('словарь', () => {
     expect(dictionary.has('весна')).toBe(true);
     expect(dictionary.has('конь')).toBe(true);
     expect(dictionary.has('это')).toBe(false);
-    expect(dictionary.has('правда')).toBe(false);
+    // ПРАВДА — тоже существительное, и словарь её теперь знает: проверяем
+    // на настоящих служебных словах, а не на существительном-частице.
+    expect(dictionary.has('очень')).toBe(false);
     expect(dictionary.has('бежать')).toBe(false);
   });
 
@@ -198,5 +202,41 @@ describe('генератор уровней', () => {
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
     expect(JSON.stringify(c)).not.toBe(JSON.stringify(a));
     expect(levelSeed(123, 7)).toBe(levelSeed(123, 7));
+  });
+});
+
+describe('копилка слов не из темы', () => {
+  it('слово языка не из темы блок не рассыпает, но уходит в копилку', () => {
+    const level = generateLevel(content, 5, { gameSeed: 1 });
+    const state = startLevel(level);
+    const figure = level.figures[0];
+    // Берём слово, которое солвер нашёл в блоке, но которое не из темы уровня.
+    const alien = figure.words.find((w) => !figure.scoring.includes(w.word));
+    if (!alien) return; // редкий чистый блок — проверять нечего
+    let moved = state;
+    for (const cell of alien.path) moved = extendSelection(moved, cell);
+    const result = releaseSelection(moved, dictionary);
+    expect(result.accepted).toBe(false);
+    expect(result.status).toBe('off-theme');
+    // Блок стоит: фаза прежняя, буквы не начислены.
+    expect(result.state.phase).toBe('playing');
+    expect(result.state.letters).toBe(0);
+    expect(result.state.bonus).toContain(alien.word);
+  });
+
+  it('повтор слова в копилке не платит второй раз', () => {
+    const save = { unlocked: 1, coins: 0, chest: 0, results: {}, bonus: [] as string[] };
+    let outcome = collectBonus('test', save, 'кит');
+    expect(outcome.count).toBe(1);
+    expect(outcome.reward).toBe(0);
+    // Тот же кит второй раз — ни списка, ни монет.
+    const again = collectBonus('test', outcome.save, 'кит');
+    expect(again.count).toBe(1);
+    expect(again.save.coins).toBe(0);
+    // Двадцатое слово закрывает круг и платит.
+    let data = outcome.save;
+    for (let i = 1; i < BONUS_GOAL; i++) data = collectBonus('test', data, `слово${i}`).save;
+    expect(data.bonus.length).toBe(BONUS_GOAL);
+    expect(data.coins).toBe(BONUS_REWARD);
   });
 });

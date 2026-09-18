@@ -38,6 +38,17 @@ export const ru: UiStrings = {
   collected: (letters, goal) =>
     `Собрано ${letters} ${plural(letters, 'буква', 'буквы', 'букв')} из ${goal} нужных.`,
   lostEarly: ' На оставшихся блоках цели было уже не достать, поэтому уровень закончен досрочно.',
+  bonusTitle: 'Доп. слова',
+  bonusButtonTitle: 'слова не из темы, найденные по пути',
+  bonusHere: 'На этом уровне:',
+  bonusEmpty: 'Пока ничего. Слово не из категорий уровня блок не рассыпает, а попадает сюда и копится дальше.',
+  bonusTotal: (count) =>
+    `Всего найдено: ${count} ${plural(count, 'слово', 'слова', 'слов')}`,
+  bonusProgress: (count, goal) => `${count} / ${goal}`,
+  bonusPaid: (coins) => `+${coins} за копилку`,
+  bonusFound: 'в копилку',
+  bonusAgain: 'уже было',
+  bonusClose: 'понятно',
   next: 'следующий уровень',
   retry: 'ещё раз',
 };

@@ -11,6 +11,9 @@ import {
   type GameState,
 } from '../game/engine.js';
 import {
+  BONUS_GOAL,
+  BONUS_REWARD,
+  collectBonus,
   applyResult,
   loadSave,
   spendCoins,
@@ -24,6 +27,7 @@ import { Backdrop } from './Backdrop.js';
 import { HintButton, Queue } from './Queue.js';
 import { Coin, Confetti, Stars } from './Coin.js';
 import { ChestBar } from './Chest.js';
+import { BonusButton, BonusFlight, BonusPanel } from './Bonus.js';
 import { BUILD } from './version.js';
 import { levelTheme } from '../core/themes.js';
 import { useContent, useUi } from './content.js';
@@ -51,23 +55,37 @@ export function App() {
   const [save, setSave] = useState<SaveData>(() => loadSave(pack.id));
   const [game, setGame] = useState<GameState | null>(null);
   const [seedNudge, setSeedNudge] = useState(0);
+  // Счётчик запусков уровня: по нему интерфейс понимает, что партия новая.
+  const [run, setRun] = useState(0);
+  // Окно итогов уходит не мгновенно: сначала гаснет, и только потом меняется
+  // уровень. Без этого следующий блок появлялся из-под ещё видимой карточки.
+  const [leaving, setLeaving] = useState(false);
   // Откуда летят буквы последнего найденного слова — только для анимации.
   const [flight, setFlight] = useState<Flight | null>(null);
   const [departed, setDeparted] = useState(0);
   // Незачтённое слово держим на экране, пока оно отвечает отказом: красным,
   // если такого слова нет вовсе, и жёлтым, если слово есть, но не из темы уровня.
-  const [rejected, setRejected] = useState<{ word: string; kind: 'unknown' | 'off-theme' } | null>(
-    null,
-  );
+  const [rejected, setRejected] = useState<{
+    word: string;
+    kind: 'unknown' | 'off-theme';
+    /** Слово уже лежит в копилке: второй раз оно ничего не приносит. */
+    repeat?: boolean;
+  } | null>(null);
   const pending = useRef<Flight | null>(null);
   // Итог уровня считается один раз, в момент завершения: экран итогов
   // показывает именно его, а не разницу кошелька.
   const [outcome, setOutcome] = useState<LevelOutcome | null>(null);
   const [poor, setPoor] = useState(false);
+  // Копилка слов не из темы: открыта ли она и надо ли мигнуть звездой.
+  const [bonusOpen, setBonusOpen] = useState(false);
+  const [bonusBump, setBonusBump] = useState(false);
+  // Буквы слова, летящие в звезду: живут только на время анимации.
+  const [bonusFlight, setBonusFlight] = useState<Flight | null>(null);
 
   const openLevel = useCallback(
     (index: number, nudge = seedNudge) => {
       const level = generateLevel(content, index, { gameSeed: 1 + nudge });
+      setRun((current) => current + 1);
       setFlight(null);
       setDeparted(0);
       setRejected(null);
@@ -167,6 +185,17 @@ export function App() {
     setGame(next);
   };
 
+  /** Закрыть окно итогов с затуханием и только потом сделать шаг.
+      Обычная функция, а не хук: она объявлена после раннего возврата,
+      и useCallback здесь ломает порядок хуков. */
+  const leave = (action: () => void): void => {
+    setLeaving(true);
+    setTimeout(() => {
+      setLeaving(false);
+      action();
+    }, 220);
+  };
+
   const handleRelease = (points: { x: number; y: number }[], size: number) => {
     setGame((current) => {
       if (!current) return current;
@@ -177,9 +206,20 @@ export function App() {
         setRejected(null);
         pending.current = { word: result.word, points, size, gap: GAP };
       } else if (result.word.length >= 2) {
-        // Отказ показываем, а не молчим: иначе непонятно, что свайп вообще засчитан.
-        setRejected({ word: result.word, kind: result.status === 'off-theme' ? 'off-theme' : 'unknown' });
+        // Слово не из темы блок не рассыпает, но уходит в копилку. Если оно там
+        // уже лежит, честно говорим «уже было»: второй раз оно ничего не приносит.
+        const known = result.status === 'off-theme' && save.bonus.includes(result.word);
+        setRejected({
+          word: result.word,
+          kind: result.status === 'off-theme' ? 'off-theme' : 'unknown',
+          repeat: known,
+        });
         setTimeout(() => setRejected(null), REJECT_MS);
+        if (result.status === 'off-theme' && !known) {
+          setSave((wallet) => collectBonus(pack.id, wallet, result.word).save);
+          // Буквы улетают в звезду: находка должна дойти до копилки на глазах.
+          setBonusFlight({ word: result.word, points, size, gap: GAP });
+        }
       }
       return result.state;
     });
@@ -189,6 +229,7 @@ export function App() {
     <>
       <Backdrop level={game.level.index} />
       <Hud
+        run={run}
         letters={game.letters}
         goal={game.level.goalLetters}
         found={game.found}
@@ -221,6 +262,10 @@ export function App() {
           {[...shown].map((letter, i) => (
             <span key={i}>{letter.toUpperCase()}</span>
           ))}
+          {/* Слово языка, но не из темы: блок стоит, а слово уходит в копилку. */}
+          {rejected?.kind === 'off-theme' && !draft && (
+            <em className="kept">{rejected.repeat ? ui.bonusAgain : ui.bonusFound}</em>
+          )}
         </div>
 
         <div className="board-slot">
@@ -252,9 +297,16 @@ export function App() {
         </div>
       </div>
 
-      {/* Нижняя полоса: подсказка слева, очередь блоков по центру. */}
+      {/* Нижняя полоса: копилка и подсказка слева, очередь блоков по центру. */}
       <div className="tray">
-        <HintButton price={HINT_PRICE} affordable={save.coins >= HINT_PRICE} onClick={askHint} />
+        <div className="tray-left">
+          <BonusButton
+            count={game.bonus.length}
+            ready={bonusBump}
+            onClick={() => setBonusOpen(true)}
+          />
+          <HintButton price={HINT_PRICE} affordable={save.coins >= HINT_PRICE} onClick={askHint} />
+        </div>
 
         <Queue
           index={game.figureIndex}
@@ -266,14 +318,39 @@ export function App() {
 
       {poor && <div className="toast">{ui.notEnoughCoins}</div>}
 
+      {bonusFlight && (
+        <BonusFlight
+          word={bonusFlight.word}
+          points={bonusFlight.points}
+          size={bonusFlight.size}
+          onDone={() => {
+            setBonusFlight(null);
+            // Звезда мигает в момент прилёта, а не в момент свайпа.
+            setBonusBump(true);
+            setTimeout(() => setBonusBump(false), 600);
+          }}
+        />
+      )}
+
+      {bonusOpen && (
+        <BonusPanel
+          here={game.bonus}
+          total={save.bonus.length}
+          goal={BONUS_GOAL}
+          reward={BONUS_REWARD}
+          onClose={() => setBonusOpen(false)}
+        />
+      )}
+
       {(game.phase === 'won' || game.phase === 'lost') && (
         <Result
           ui={ui}
           state={game}
           outcome={outcome}
-          onRetry={() => openLevel(game.level.index)}
-          onNext={() => openLevel(game.level.index + 1)}
-          onMap={() => setGame(null)}
+          leaving={leaving}
+          onRetry={() => leave(() => openLevel(game.level.index))}
+          onNext={() => leave(() => openLevel(game.level.index + 1))}
+          onMap={() => leave(() => setGame(null))}
         />
       )}
     </>
@@ -310,9 +387,12 @@ function LevelMap({ content, save, onPick }: LevelMapProps) {
                 .join(' ')}
               disabled={locked}
               onClick={() => onPick(index)}
+              /* Категории уровня — в подсказке, а не на карточке: их пять,
+                 и списком они превращают карту в стену текста. Игрок всё равно
+                 видит категорию над каждым блоком, когда играет. */
+              title={levelTheme(content.pack.themes, index).title}
             >
               <b>{index}</b>
-              <em>{levelTheme(content.pack.themes, index).title}</em>
               <small>
                 {result ? `${result.bestLetters}/${result.goal}` : locked ? ui.locked : ui.noResult}
               </small>
@@ -353,12 +433,14 @@ interface ResultProps {
   state: GameState;
   /** Что уровень принёс: награда, сундук. Показываем именно его, а не остаток. */
   outcome: LevelOutcome | null;
+  /** Окно уже гаснет: кнопки в этот момент трогать нечего. */
+  leaving: boolean;
   onRetry: () => void;
   onNext: () => void;
   onMap: () => void;
 }
 
-function Result({ ui, state, outcome, onRetry, onNext, onMap }: ResultProps) {
+function Result({ ui, state, outcome, leaving, onRetry, onNext, onMap }: ResultProps) {
   const won = state.phase === 'won';
   const played = state.outcomes.length;
   const total = state.level.figures.length;
@@ -369,7 +451,7 @@ function Result({ ui, state, outcome, onRetry, onNext, onMap }: ResultProps) {
     state.outcomes.every((o) => o.missed.every((w) => w.length <= o.taken.length));
 
   return (
-    <div className="overlay">
+    <div className={leaving ? 'overlay out' : 'overlay'}>
       {won && <Confetti />}
       <div className="card">
         {won && <Stars />}

@@ -46,13 +46,20 @@ export function Queue({ index, total, upcoming }: QueueProps) {
       const style = getComputedStyle(tray);
       const pad = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
       const gap = parseFloat(style.columnGap) || 0;
-      const hint = tray.querySelector('.hint')?.getBoundingClientRect().width ?? 0;
+      // Слева в полосе стоит группа кнопок (копилка и подсказка), а не одна
+      // подсказка: мерить надо всю группу, иначе очередь вылезает за край.
+      const left = tray.querySelector('.tray-left')?.getBoundingClientRect().width ?? 0;
       const label = tray.querySelector('.queue-label')?.getBoundingClientRect().width ?? 0;
-      const room = tray.clientWidth - pad - hint - label - gap * 2;
-      const natural =
-        upcoming.reduce((sum, figure, place) => sum + figure.width * thumbUnit(figure, place), 0) +
-        Math.max(0, upcoming.length - 1) * GAP;
-      setScale(natural > 0 ? Math.min(1, room / natural) : 1);
+      const room = tray.clientWidth - pad - left - label - gap * 2;
+      // Ужимаются только сами миниатюры: зазоры между ними заданы в пикселях
+      // и множителем не трогаются. Если считать их частью ужимаемой ширины,
+      // очередь всё равно вылезает за край — ровно на несъеденные зазоры.
+      const gaps = Math.max(0, upcoming.length - 1) * GAP;
+      const natural = upcoming.reduce(
+        (sum, figure, place) => sum + figure.width * thumbUnit(figure, place),
+        0,
+      );
+      setScale(natural > 0 ? Math.min(1, (room - gaps) / natural) : 1);
     };
 
     fit();
@@ -83,7 +90,11 @@ export function Queue({ index, total, upcoming }: QueueProps) {
                 opacity: FADE[place] ?? 0.4,
               }}
             >
-              <path d={outlinePath(figure.cells, 1, 1, 0, 0)} />
+              {/* Два пути, как у самой детали: широкий тёмный кант снизу и кремовое
+                  тело поверх. Скругление даёт именно обводка, поэтому у тела она
+                  своя — без неё углы миниатюры выходят острыми. */}
+              <path className="rim" d={outlinePath(figure.cells, 1, 1, 0, 0)} />
+              <path className="body" d={outlinePath(figure.cells, 1, 1, 0, 0)} />
             </svg>
           );
         })}

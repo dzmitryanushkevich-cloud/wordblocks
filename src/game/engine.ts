@@ -25,6 +25,12 @@ export interface GameState {
   selection: number[];
   found: FoundEntry[];
   letters: number;
+  /**
+   * Слова не из темы, найденные на этом уровне. Блок они не рассыпают и в цель
+   * не идут, но и пропадать им незачем: игрок их честно нашёл, и они копятся
+   * в копилку (звёздочка в нижней полосе).
+   */
+  bonus: string[];
   outcomes: FigureOutcome[];
   /** Открытые подсказкой клетки — начало загаданного слова, по одной за нажатие. */
   hintCells: number[];
@@ -48,6 +54,7 @@ export function startLevel(level: Level): GameState {
     selection: [],
     found: [],
     letters: 0,
+    bonus: [],
     outcomes: [],
     hintCells: [],
     hintsUsed: 0,
@@ -110,7 +117,10 @@ export function releaseSelection(state: GameState, dictionary: Dictionary): Rele
 
   if (!scores) {
     const status: ReleaseStatus = drawn && dictionary.has(word) ? 'off-theme' : 'unknown';
-    return { state: { ...state, selection: [] }, accepted: false, status, word };
+    // Слово языка, но не из темы: блок стоит, а слово уходит в копилку.
+    const bonus =
+      status === 'off-theme' && !state.bonus.includes(word) ? [...state.bonus, word] : state.bonus;
+    return { state: { ...state, selection: [], bonus }, accepted: false, status, word };
   }
 
   const missed = figure.scoring.filter((w) => w !== word);

@@ -42,6 +42,7 @@ export const english: LanguagePack = {
       themed: 3,
       short: 6,
     },
+    coreUntil: 3,
     commonUntil: 12,
     shapeStages: [4, 9],
     minWord: 3,

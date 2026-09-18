@@ -18,6 +18,8 @@ export interface Flight {
 }
 
 interface HudProps {
+  /** Номер партии: меняется на каждый запуск уровня, в том числе на повтор. */
+  run: number;
   letters: number;
   goal: number;
   found: FoundEntry[];
@@ -32,7 +34,7 @@ interface HudProps {
 }
 
 /** Шапка: прогресс по буквам и найденные слова плитками, как в макете. */
-export function Hud({ letters, goal, found, coins, flight, hideLast, debug, onMap }: HudProps) {
+export function Hud({ run, letters, goal, found, coins, flight, hideLast, debug, onMap }: HudProps) {
   const ui = useUi();
   const percent = Math.min(100, Math.round((letters / goal) * 100));
   // Кошелёк подпрыгивает на каждое изменение — иначе трату легко не заметить.
@@ -75,7 +77,10 @@ export function Hud({ letters, goal, found, coins, flight, hideLast, debug, onMa
 
       {/* Прогресс по буквам — под списком найденных слов. */}
       <div className="track">
-        <i style={{ width: `${percent}%` }} />
+        {/* Ключ по партии: на новом уровне полоска обязана появиться пустой,
+            а не отматываться назад. Анимация ширины хороша, когда слово найдено,
+            и нелепа, когда уровень сменился — прогресс «проигрывался» обратно. */}
+        <i key={run} style={{ width: `${percent}%` }} />
         <div className="progress-label">
           {letters} / {goal}
         </div>

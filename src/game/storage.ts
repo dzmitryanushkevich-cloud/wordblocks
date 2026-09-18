@@ -11,6 +11,12 @@ export interface SaveData {
   /** Сколько новых уровней уже сложено в сундук: на десятом он открывается. */
   chest: number;
   results: Record<number, LevelResult>;
+  /**
+   * Копилка слов не из темы: все, что игрок нашёл по пути, без повторов.
+   * Хранится списком, а не числом, чтобы одно и то же слово не приносило
+   * монеты дважды — иначе выгодно было бы переигрывать один блок.
+   */
+  bonus: string[];
 }
 
 /** Стартовый кошелёк: хватает на две подсказки, дальше зарабатывай. */
@@ -18,10 +24,13 @@ export const START_COINS = 50;
 /** Сундук: копится по уровням и разом высыпает горсть монет. */
 export const CHEST_GOAL = 10;
 export const CHEST_REWARD = 100;
+/** Копилка слов не из темы: каждые двадцать слов приносят монеты. */
+export const BONUS_GOAL = 20;
+export const BONUS_REWARD = 20;
 
 /** Прогресс отдельный на каждый язык: уровни и слова в них разные. */
 const key = (lang: string): string => `wordblocks.save.${lang}.v1`;
-const EMPTY: SaveData = { unlocked: 1, coins: START_COINS, chest: 0, results: {} };
+const EMPTY: SaveData = { unlocked: 1, coins: START_COINS, chest: 0, results: {}, bonus: [] };
 
 /**
  * Прогресс в localStorage. При открытии файла с диска браузер может запретить
@@ -38,6 +47,7 @@ export function loadSave(lang: string): SaveData {
       coins: Number.isFinite(parsed.coins) ? Math.max(0, Math.round(parsed.coins)) : START_COINS,
       chest: Number.isFinite(parsed.chest) ? Math.max(0, Math.round(parsed.chest)) % CHEST_GOAL : 0,
       results: parsed.results ?? {},
+      bonus: Array.isArray(parsed.bonus) ? parsed.bonus.filter((w) => typeof w === 'string') : [],
     };
   } catch {
     return { ...EMPTY };
@@ -90,6 +100,7 @@ export function applyResult(
   const chestBonus = chestTo >= CHEST_GOAL ? CHEST_REWARD : 0;
 
   const next: SaveData = {
+    ...data,
     unlocked: passed ? Math.max(data.unlocked, level + 1) : data.unlocked,
     coins: data.coins + prize + chestBonus,
     chest: chestBonus > 0 ? 0 : chestTo,
@@ -116,3 +127,28 @@ export function spendCoins(lang: string, data: SaveData, amount: number): SaveDa
 const BASE_REWARD = 20;
 const PERFECT_BONUS = 10;
 const REPLAY_REWARD = 5;
+
+/** Что принесло слово в копилку: обновлённое сохранение и монеты, если порог взят. */
+export interface BonusOutcome {
+  save: SaveData;
+  /** Сколько всего слов в копилке после этого. */
+  count: number;
+  /** Монеты за взятый порог: ноль, пока копилка не набрала очередную двадцатку. */
+  reward: number;
+}
+
+/**
+ * Слово не из темы уходит в копилку. Повтор не считается: слово уже лежит
+ * в списке, и второй раз за него не платят. Каждая полная двадцатка приносит
+ * монеты — это единственная награда за наблюдательность, не связанная с целью.
+ */
+export function collectBonus(lang: string, data: SaveData, word: string): BonusOutcome {
+  if (data.bonus.includes(word)) {
+    return { save: data, count: data.bonus.length, reward: 0 };
+  }
+  const bonus = [...data.bonus, word];
+  const reward = bonus.length % BONUS_GOAL === 0 ? BONUS_REWARD : 0;
+  const save: SaveData = { ...data, bonus, coins: data.coins + reward };
+  storeSave(lang, save);
+  return { save, count: bonus.length, reward };
+}

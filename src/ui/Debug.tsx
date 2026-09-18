@@ -45,7 +45,10 @@ export function Debug({ state, onRegenerate, onSolve }: DebugProps) {
             слова блока:{' '}
             {figure.words.map((w) => (
               <span key={w.word}>
-                <code>{w.word.toUpperCase()}</code>{' '}
+                {/* Жёлтым — слова не из темы: они не рассыпают блок, а идут в копилку. */}
+                <code className={figure.scoring.includes(w.word) ? '' : 'alien'}>
+                  {w.word.toUpperCase()}
+                </code>{' '}
               </span>
             ))}
           </div>

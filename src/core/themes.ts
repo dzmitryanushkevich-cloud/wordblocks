@@ -10,6 +10,11 @@ export function commonWords(themes: ThemeContent, id: string): string[] {
   return (themes.common[id] ?? '').split(' ').filter(Boolean);
 }
 
+/** Ядро категории: то, что называют первым. Им прячутся самые первые уровни. */
+export function coreWords(themes: ThemeContent, id: string): string[] {
+  return (themes.core[id] ?? '').split(' ').filter(Boolean);
+}
+
 export function allThemeWords(themes: ThemeContent): string[] {
   return Object.keys(themes.categories).flatMap((id) => categoryWords(themes, id));
 }
@@ -63,6 +68,29 @@ export function figureLabels(
 }
 
 /**
+ * Слова одной категории — ими прячется первый блок уровня. Ходовая часть
+ * на ранних уровнях по той же причине, что и у всей темы: незнакомое слово
+ * игрок не ищет, а гадает.
+ */
+export function categoryPool(
+  themes: ThemeContent,
+  category: string,
+  depth: PoolDepth = 'all',
+): string[] {
+  if (depth === 'core') {
+    const core = coreWords(themes, category);
+    if (core.length > 0) return core;
+  }
+  return depth === 'all' ? categoryWords(themes, category) : commonWords(themes, category);
+}
+
+/**
+ * Насколько глубоко генератор черпает слова темы:
+ * ядро — самое очевидное, ходовая часть — всё, что знают, всё — вся категория.
+ */
+export type PoolDepth = 'core' | 'common' | 'all';
+
+/**
  * Слова темы уровня одним списком. На ранних уровнях — только ходовая часть:
  * АЙВА и РЯПУШКА такие же фрукты и рыбы, как ЯБЛОКО и ЩУКА, но игрок,
  * который не знает слова, не ищет его, а гадает.
@@ -70,9 +98,7 @@ export function figureLabels(
 export function themeWords(
   themes: ThemeContent,
   theme: LevelTheme,
-  commonOnly = false,
+  depth: PoolDepth = 'all',
 ): string[] {
-  return theme.categories.flatMap((id) =>
-    commonOnly ? commonWords(themes, id) : categoryWords(themes, id),
-  );
+  return theme.categories.flatMap((id) => categoryPool(themes, id, depth));
 }
