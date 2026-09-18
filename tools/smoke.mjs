@@ -29,11 +29,10 @@ const shot = (name) => page.screenshot({ path: new URL(`../.shots/${name}.png`, 
 // Язык закрепляем явно: тест читает русские подписи, а по умолчанию игра
 // смотрит на язык браузера.
 await page.goto(`${new URL('../wordblocks.html', import.meta.url).href}?lang=ru`);
-await page.waitForSelector('.levels');
-await shot('01-map');
-
-await page.click('.level-card >> nth=0');
+// Игра открывается сразу на последнем доступном уровне, а с чистым хранилищем —
+// на первом; карта живёт за кнопкой «назад», её проверяем ниже.
 await page.waitForSelector('.board');
+await shot('01-level');
 await settleBoard();
 
 const tiles = () => page.evaluate(() => {
@@ -108,7 +107,8 @@ await page.mouse.move(cells[junkPath[0]].cx, cells[junkPath[0]].cy);
 await page.mouse.down();
 await page.mouse.move(cells[junkPath[1]].cx, cells[junkPath[1]].cy);
 await page.mouse.up();
-assert.equal(await progress(), '0 / 16', 'свайп из двух букв не должен давать букв');
+// Цель уровня зависит от кривой, поэтому сверяем только собранное.
+assert.ok((await progress()).startsWith('0 /'), 'свайп из двух букв не должен давать букв');
 assert.deepEqual(await foundWords(), [], 'свайп из двух букв не должен попадать в список');
 
 // 1.5. Слово не из темы: блок стоит, а слово уходит в копилку.
@@ -145,25 +145,36 @@ if (alien.length >= 3) {
 }
 
 // 2. Настоящее слово засчитывается мгновенно, блок рассыпается, приходит следующий.
-// Слово берём из панели отладки, чтобы тест не зависел от кривой сложности.
-await page.click('.debug-toggle');
-const word = await page.evaluate(() => {
-  const row = [...document.querySelectorAll('.debug div')].find((d) => d.textContent.startsWith('якорь'));
-  return (row?.textContent ?? '').replace('якорь', '').trim().toLowerCase();
-});
-await page.click('.debug-toggle');
-const path = pathFor(cells, word);
-assert.ok(word.length >= 3, 'панель отладки должна показывать якорное слово');
-assert.ok(path, `слово ${word.toUpperCase()} должно лежать в первом блоке`);
-await page.mouse.move(cells[path[0]].cx, cells[path[0]].cy);
-await page.mouse.down();
-for (const i of path.slice(1)) await page.mouse.move(cells[i].cx, cells[i].cy, { steps: 4 });
+// Слово берём из панели отладки, чтобы тест не зависел от кривой сложности:
+// там перечислены все слова блока, тематические — обычным кодом, остальные с
+// классом alien. Самое длинное тематическое и есть якорь.
+const anchorWord = async () => {
+  await page.click('.debug-toggle');
+  const words = await page.evaluate(() =>
+    [...document.querySelectorAll('.debug code')]
+      .filter((c) => !c.classList.contains('alien'))
+      .map((c) => c.textContent.trim().toLowerCase()),
+  );
+  await page.click('.debug-toggle');
+  return words.sort((a, b) => b.length - a.length)[0] ?? '';
+};
+
+/** Проводит пальцем по слову в текущем блоке. */
+const swipeWord = async (cellsNow, word) => {
+  const path = pathFor(cellsNow, word);
+  assert.ok(path, `слово ${word.toUpperCase()} должно лежать в блоке`);
+  await swipe(cellsNow, path);
+};
+
+const word = await anchorWord();
+assert.ok(word.length >= 3, 'панель отладки должна показывать слова блока');
 await shot('02-swipe');
-await page.mouse.up();
+await swipeWord(cells, word);
 await shot('03-crumble');
-await page.waitForFunction(() => document.querySelector('.queue-label b').textContent.includes('2 из 5'), null, { timeout: 15000 });
+// Блоков в уровне столько, сколько велит кривая, поэтому ждём просто второй.
+await page.waitForFunction(() => document.querySelector('.queue-label b').textContent.startsWith('2 из'), null, { timeout: 15000 });
 await settleBoard();
-assert.equal(await progress(), `${word.length} / 16`);
+assert.ok((await progress()).startsWith(`${word.length} /`), 'в счётчике должны быть буквы якоря');
 assert.deepEqual(await foundWords(), [word.toUpperCase()]);
 await shot('04-next-figure');
 
@@ -175,17 +186,19 @@ const walletAfter = Number((await page.textContent('.wallet')).replace(/\D/g, ''
 assert.ok(walletAfter < walletBefore, 'подсказка должна списать монеты');
 await shot('05-hint');
 
-// 4. Проходим уровень через отладку. Уровень закрывается сразу, как только исход
-// предрешён, поэтому блоков может быть меньше пяти — ждём окно итогов.
-await page.click('.debug-toggle');
-for (let i = 0; i < 5; i++) {
+// 4. Доигрываем уровень: в каждом блоке берём якорь настоящим свайпом. Уровень
+// закрывается сразу, как только исход предрешён, поэтому блоков может пройти
+// меньше, чем их в уровне, — ждём окно итогов.
+for (let i = 0; i < 8; i++) {
   if (await page.locator('.overlay').count()) break;
-  await page.click('.debug button >> nth=0');
+  await settleBoard();
+  const next = await anchorWord();
+  await swipeWord(await tiles(), next);
   await page.waitForFunction(
     (text) =>
       document.querySelector('.overlay') != null ||
-      document.querySelector('.queue-label b').textContent.includes(text),
-    `${i + 3} из 5`,
+      document.querySelector('.queue-label b').textContent.startsWith(text),
+    `${i + 3} из`,
     { timeout: 15000 },
   );
 }
@@ -199,7 +212,14 @@ assert.match(prize, /\+\d+/, 'на победе должна быть награ
 assert.equal(title, 'Браво!', 'взяв все якоря, уровень должен быть пройден');
 
 // 5. Прогресс уровня сохраняется и уровень 2 открывается.
-await page.click('.card .ghost');
+// На победе кнопки к карте в окне нет: сначала уходим на следующий уровень,
+// и уже оттуда — домиком в шапке.
+// Именно кнопка в ряду: класс big есть и у средней звезды в заголовке окна.
+await page.click('.card .row button >> nth=0');
+await page.waitForSelector('.overlay', { state: 'detached' });
+await page.waitForSelector('.board');
+await page.waitForTimeout(400);
+await page.click('.back');
 await page.waitForSelector('.levels');
 await shot('07-map-after');
 const unlocked = await page.evaluate(() => JSON.parse(localStorage.getItem('wordblocks.save.ru.v1') ?? '{}'));

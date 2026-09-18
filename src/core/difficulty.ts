@@ -35,6 +35,12 @@ export interface FigureParams {
    * сложности поиска, не считая размера блока.
    */
   maxTurns: number;
+  /**
+   * Слово лежит только слева направо и сверху вниз. На первых уровнях, пока
+   * игрок не понял правила, зеркальная ЛИСА читается как АСИЛ — это не
+   * сложность, а путаница.
+   */
+  readable: boolean;
 }
 
 export interface LevelParams {
@@ -47,6 +53,18 @@ export interface LevelParams {
 }
 
 const clamp = (value: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, value));
+
+/**
+ * Сколько блоков в уровне. Это такая же ось сложности, как длина слова и размер
+ * блока: первые уровни короткие, чтобы игру можно было попробовать за минуту,
+ * дальше партия растёт. Расписание лежит в пакете языка, потому что там же
+ * лежит вся остальная кривая.
+ */
+export function levelBlocks(curve: CurveContent, levelIndex: number): number {
+  let count = curve.blocks[0]?.count ?? 5;
+  for (const step of curve.blocks) if (levelIndex >= step.from) count = step.count;
+  return count;
+}
 
 /**
  * Дальше расписанных вручную уровней кривая продолжается формулой.
@@ -79,7 +97,11 @@ function laterLevel(curve: CurveContent, levelIndex: number, figureCount: number
  * вручную — это обучение, и каждый шаг добавляет ровно одну новую трудность;
  * дальше кривая продолжается формулой от номера уровня.
  */
-export function levelParams(curve: CurveContent, levelIndex: number, figureCount = 5): LevelParams {
+export function levelParams(
+  curve: CurveContent,
+  levelIndex: number,
+  figureCount = levelBlocks(curve, levelIndex),
+): LevelParams {
   const plan =
     levelIndex <= curve.opening.length
       ? curve.opening[levelIndex - 1]
@@ -108,6 +130,7 @@ export function levelParams(curve: CurveContent, levelIndex: number, figureCount
       temptationLength: clamp(anchorLength - 3, 3, 4),
       maxTurns: plan.turns,
       anchorPool: plan.pool,
+      readable: levelIndex <= curve.readableUntil,
     });
   }
   // До тринадцатого уровня прячем только то, что знают все: редкое слово

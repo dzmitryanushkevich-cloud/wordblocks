@@ -15,6 +15,15 @@ export const russian: LanguagePack = {
   dictionary: { ...dictionary, fillerExclude: ['ъ'] },
   themes: themes as ThemeContent,
   curve: {
+    // Блоков в уровне: три на знакомстве, семь к концу. То же расписание
+    // продублировано в оффлайновом сборщике планов (plan.py).
+    blocks: [
+      { from: 1, count: 3 },
+      { from: 3, count: 4 },
+      { from: 5, count: 5 },
+      { from: 11, count: 6 },
+      { from: 21, count: 7 },
+    ],
     opening: [
       { anchors: [4, 4, 4, 4, 4], size: 7, turns: 1, goal: 0.6, words: 3, themed: 2, short: 3, pool: 700 },
       { anchors: [4, 4, 5, 4, 4], size: 8, turns: 1, goal: 0.65, words: 4, themed: 2, short: 3, pool: 900 },
@@ -40,6 +49,8 @@ export const russian: LanguagePack = {
       themed: 3,
       short: 4,
     },
+    // Первые уровни читаются как написано: слово лежит слева направо.
+    readableUntil: 2,
     coreUntil: 3,
     commonUntil: 12,
     shapeStages: [4, 9],

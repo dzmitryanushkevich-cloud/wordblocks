@@ -63,6 +63,12 @@ export interface CurveRow {
 
 /** Кривая сложности языка: слова разных языков разной длины, кривая тоже своя. */
 export interface CurveContent {
+  /**
+   * Сколько блоков в уровне. Растёт ступенями: короткое знакомство в начале
+   * и длинная партия к концу. Каждая ступень — уровень, с которого она
+   * действует; между ступенями число держится.
+   */
+  blocks: { from: number; count: number }[];
   /** Первые уровни расписаны вручную: это обучение. */
   opening: CurveRow[];
   /** Дальше кривая продолжается формулой от номера уровня. */
@@ -79,6 +85,8 @@ export interface CurveContent {
     themed: number;
     short: number;
   };
+  /** До какого уровня слова лежат только слева направо и сверху вниз. */
+  readableUntil: number;
   /** До какого уровня прячем только ходовые слова категорий. */
   /** До какого уровня прячем только ядро категорий. */
   coreUntil: number;
@@ -101,10 +109,19 @@ export interface UiStrings {
   noResult: string;
   toMap: string;
   toMapTitle: string;
+  /** Кнопка полного экрана: надпись в обычном состоянии и в развёрнутом. */
+  fullscreen: string;
+  fullscreenExit: string;
+  fullscreenTitle: string;
   hint: string;
   hintTitle: string;
+  /** Подсказка новичку на первом уровне: стоит там же, где собираемое слово. */
+  tutorHint: string;
   blockWord: string;
   blockOf: (index: number, total: number) => string;
+  /** Подпись уровня в шапке: «Уровень 3» и её короткая форма для узкого экрана. */
+  levelName: (index: number) => string;
+  levelNameShort: (index: number) => string;
   won: string;
   lost: string;
   /** Похвала на экране победы: идеальный проход и обычный. */

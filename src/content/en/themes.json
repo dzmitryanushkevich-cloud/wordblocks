@@ -19,7 +19,13 @@
   "jobs": "actor artist baker barber builder butcher captain carpenter cashier chef chemist cook dancer designer doctor driver electrician engineer farmer gardener jeweller journalist judge lawyer librarian mechanic miner nurse painter photographer pilot plumber poet programmer sailor scientist seller singer soldier tailor teacher waiter welder writer",
   "sports": "archery badminton basketball boxing champion climbing cricket cycling diving fencing football goal golf gymnastics hockey jogging judo karate marathon match medal relay rowing rugby running skating skiing soccer sprint surfing swimming tennis trophy volleyball wrestling",
   "music": "accordion ballet band banjo cello choir chord clarinet concert drum flute guitar harmonica harp keyboard march melody note opera orchestra organ piano rhythm saxophone scale song tambourine tempo trombone trumpet ukulele violin waltz",
-  "tools": "axe bolt brush chisel clamp crowbar drill file hammer hoe ladder level mallet nail nut pliers rake roller ruler sandpaper saw screw screwdriver shovel spade spanner tape toolbox vise wrench"
+  "tools": "axe bolt brush chisel clamp crowbar drill file hammer hoe ladder level mallet nail nut pliers rake roller ruler sandpaper saw screw screwdriver shovel spade spanner tape toolbox vise wrench",
+  "food": "bacon bread burger butter cereal cheese cream dumpling egg flour meat noodle omelette pancake pasta pie pizza porridge rice salad sandwich sausage soup steak sugar yogurt",
+  "sweets": "brownie cake candy caramel chocolate cookie dessert donut honey lollipop marshmallow muffin pudding toffee waffle",
+  "drinks": "cider cocoa coffee juice lemonade milk smoothie soda tea water",
+  "body": "ankle cheek chin ear elbow eye finger foot forehead hair hand head heart heel knee lip mouth nail neck nose shoulder stomach thumb tongue tooth wrist",
+  "family": "aunt brother cousin daughter family father grandfather grandmother mother nephew niece parent sister son twin uncle",
+  "school": "backpack bell board chalk class crayon desk eraser globe homework lesson library notebook pen pencil ruler school student teacher textbook"
  },
  "families": {
   "Garden": [
@@ -53,6 +59,18 @@
    "sports",
    "music",
    "tools"
+  ],
+  "Food": [
+   "food",
+   "sweets",
+   "drinks"
+  ],
+  "People": [
+   "body",
+   "family"
+  ],
+  "School": [
+   "school"
   ]
  },
  "clarity": {
@@ -75,7 +93,13 @@
   "weather": 3,
   "sports": 3,
   "music": 3,
-  "jobs": 3
+  "jobs": 3,
+  "food": 1,
+  "sweets": 1,
+  "drinks": 1,
+  "body": 1,
+  "family": 1,
+  "school": 2
  },
  "common": {
   "fruits": "apple apricot avocado banana cherry coconut date fig grape kiwi lemon lime mango melon orange peach pear pineapple plum watermelon",
@@ -97,7 +121,13 @@
   "jobs": "actor artist baker barber builder captain carpenter cashier chef cook dancer doctor driver engineer farmer gardener judge lawyer mechanic nurse painter pilot plumber poet sailor scientist singer soldier tailor teacher waiter writer",
   "sports": "basketball boxing champion climbing cycling diving football goal golf hockey judo karate marathon match medal running skating skiing soccer sprint surfing swimming tennis trophy volleyball wrestling",
   "music": "ballet band banjo cello choir chord clarinet concert drum flute guitar harp keyboard march melody note opera orchestra organ piano rhythm saxophone song trombone trumpet violin",
-  "tools": "axe bolt brush chisel drill hammer hoe ladder nail nut pliers rake roller ruler saw screw screwdriver shovel spade tape toolbox wrench"
+  "tools": "axe bolt brush chisel drill hammer hoe ladder nail nut pliers rake roller ruler saw screw screwdriver shovel spade tape toolbox wrench",
+  "food": "bacon bread burger butter cereal cheese egg flour meat noodle pancake pasta pie pizza rice salad sandwich sausage soup steak sugar",
+  "sweets": "brownie cake candy caramel chocolate cookie dessert donut honey lollipop muffin pudding waffle",
+  "drinks": "cider cocoa coffee juice lemonade milk smoothie soda tea water",
+  "body": "cheek chin ear elbow eye finger foot hair hand head heart heel knee lip mouth nail neck nose shoulder stomach thumb tongue tooth",
+  "family": "aunt brother cousin daughter family father grandfather grandmother mother nephew niece parent sister son uncle",
+  "school": "backpack bell board chalk class crayon desk eraser globe homework lesson library notebook pen pencil ruler school student teacher textbook"
  },
  "core": {
   "animals": "dog cat cow horse pig sheep bear wolf fox lion tiger elephant monkey rabbit mouse deer goat seal",
@@ -119,276 +149,306 @@
   "jobs": "doctor teacher cook driver soldier actor singer pilot farmer nurse",
   "sports": "football hockey tennis boxing running skiing skating golf soccer basketball goal",
   "music": "guitar drum trumpet violin piano song note choir flute band",
-  "tools": "hammer saw axe nail shovel ladder brush drill wrench rake"
+  "tools": "hammer saw axe nail shovel ladder brush drill wrench rake",
+  "food": "bread soup cheese butter meat egg pizza rice salad sandwich",
+  "sweets": "candy cookie chocolate donut muffin honey cake waffle",
+  "drinks": "water tea coffee juice milk soda lemonade cocoa",
+  "body": "head hand foot finger eye ear nose mouth tooth hair neck knee",
+  "family": "mother father son daughter brother sister grandmother grandfather aunt uncle",
+  "school": "desk board chalk notebook pen pencil ruler backpack class lesson school teacher"
  },
  "plan": [
   {
    "categories": [
     "animals",
-    "vehicles",
-    "kitchen",
-    "trees",
+    "body",
     "shoes"
    ]
   },
   {
    "categories": [
-    "birds",
-    "vegetables",
+    "vehicles",
     "clothes",
-    "buildings",
     "furniture"
    ]
   },
   {
    "categories": [
-    "animals",
-    "vehicles",
-    "fruits",
-    "furniture",
-    "flowers"
+    "birds",
+    "kitchen",
+    "trees",
+    "drinks"
    ]
   },
   {
    "categories": [
-    "birds",
-    "clothes",
-    "kitchen",
+    "body",
     "flowers",
+    "food",
     "fruits"
    ]
   },
   {
    "categories": [
     "buildings",
-    "trees",
-    "shoes",
-    "fish",
-    "berries"
+    "clothes",
+    "flowers",
+    "vegetables",
+    "sweets"
    ]
   },
   {
    "categories": [
+    "animals",
     "vehicles",
-    "trees",
+    "furniture",
+    "fruits",
+    "family"
+   ]
+  },
+  {
+   "categories": [
+    "buildings",
+    "kitchen",
     "vegetables",
+    "drinks",
+    "shoes"
+   ]
+  },
+  {
+   "categories": [
+    "trees",
+    "family",
+    "sweets",
     "insects",
     "tools"
    ]
   },
   {
    "categories": [
-    "animals",
-    "furniture",
-    "flowers",
-    "fruits",
-    "vegetables"
-   ]
-  },
-  {
-   "categories": [
     "birds",
-    "buildings",
-    "clothes",
-    "insects",
-    "tools"
-   ]
-  },
-  {
-   "categories": [
-    "kitchen",
-    "flowers",
-    "tools",
-    "fish",
-    "berries"
-   ]
-  },
-  {
-   "categories": [
-    "animals",
-    "buildings",
-    "shoes",
-    "fish",
-    "berries"
-   ]
-  },
-  {
-   "categories": [
-    "vehicles",
-    "furniture",
+    "food",
     "trees",
-    "shoes",
-    "insects"
-   ]
-  },
-  {
-   "categories": [
-    "birds",
-    "kitchen",
-    "fruits",
-    "tools",
-    "insects"
-   ]
-  },
-  {
-   "categories": [
-    "vegetables",
-    "shoes",
-    "jobs",
-    "sports",
-    "weather"
-   ]
-  },
-  {
-   "categories": [
-    "clothes",
-    "berries",
-    "sports",
-    "music",
-    "weather"
+    "school",
+    "berries"
    ]
   },
   {
    "categories": [
     "flowers",
-    "kitchen",
+    "tools",
+    "school",
     "fish",
-    "jobs",
-    "music"
+    "berries"
    ]
   },
   {
    "categories": [
-    "fruits",
-    "clothes",
-    "jobs",
-    "sports",
-    "weather"
+    "body",
+    "furniture",
+    "food",
+    "vegetables",
+    "insects",
+    "fish"
    ]
   },
   {
    "categories": [
     "animals",
-    "vehicles",
+    "drinks",
+    "shoes",
     "tools",
+    "school",
+    "berries"
+   ]
+  },
+  {
+   "categories": [
+    "vehicles",
+    "clothes",
+    "family",
+    "fish",
+    "jobs",
+    "weather"
+   ]
+  },
+  {
+   "categories": [
+    "fruits",
+    "family",
+    "fish",
+    "sports",
     "weather",
     "music"
    ]
   },
   {
    "categories": [
-    "vegetables",
-    "furniture",
-    "insects",
-    "sports",
-    "music"
-   ]
-  },
-  {
-   "categories": [
-    "trees",
-    "vehicles",
-    "fish",
-    "jobs",
-    "weather"
-   ]
-  },
-  {
-   "categories": [
     "birds",
     "buildings",
-    "clothes",
-    "berries",
-    "jobs"
-   ]
-  },
-  {
-   "categories": [
-    "shoes",
-    "fish",
-    "berries",
-    "sports",
-    "music"
-   ]
-  },
-  {
-   "categories": [
-    "animals",
     "kitchen",
-    "trees",
-    "sports",
-    "weather"
+    "vegetables",
+    "food",
+    "sports"
    ]
   },
   {
    "categories": [
-    "buildings",
     "fruits",
-    "furniture",
-    "insects",
-    "jobs"
-   ]
-  },
-  {
-   "categories": [
-    "birds",
-    "flowers",
-    "vegetables",
-    "vehicles",
-    "music"
-   ]
-  },
-  {
-   "categories": [
-    "buildings",
-    "vegetables",
     "clothes",
+    "sweets",
     "insects",
-    "tools"
-   ]
-  },
-  {
-   "categories": [
-    "fruits",
-    "furniture",
-    "fish",
-    "jobs",
-    "weather"
-   ]
-  },
-  {
-   "categories": [
-    "birds",
-    "trees",
-    "furniture",
-    "tools",
+    "weather",
     "music"
    ]
   },
   {
    "categories": [
-    "flowers",
-    "vehicles",
-    "tools",
+    "kitchen",
+    "sweets",
+    "insects",
     "berries",
+    "jobs",
     "sports"
    ]
   },
   {
    "categories": [
     "buildings",
+    "trees",
+    "furniture",
+    "body",
+    "jobs",
+    "music"
+   ]
+  },
+  {
+   "categories": [
     "flowers",
-    "vegetables",
+    "vehicles",
     "shoes",
-    "berries"
+    "berries",
+    "sports",
+    "weather"
+   ]
+  },
+  {
+   "categories": [
+    "animals",
+    "vegetables",
+    "drinks",
+    "tools",
+    "school",
+    "weather"
+   ]
+  },
+  {
+   "categories": [
+    "fruits",
+    "trees",
+    "clothes",
+    "food",
+    "fish",
+    "jobs",
+    "music"
    ]
   },
   {
    "categories": [
     "birds",
+    "flowers",
+    "vehicles",
+    "body",
+    "drinks",
+    "school",
+    "music"
+   ]
+  },
+  {
+   "categories": [
+    "birds",
+    "buildings",
+    "furniture",
+    "family",
+    "sweets",
+    "insects",
+    "sports"
+   ]
+  },
+  {
+   "categories": [
+    "animals",
+    "kitchen",
+    "trees",
+    "food",
+    "tools",
+    "berries",
+    "music"
+   ]
+  },
+  {
+   "categories": [
+    "fruits",
+    "vehicles",
+    "sweets",
+    "shoes",
+    "tools",
+    "jobs",
+    "weather"
+   ]
+  },
+  {
+   "categories": [
+    "buildings",
+    "vegetables",
+    "clothes",
+    "furniture",
+    "family",
+    "insects",
+    "sports"
+   ]
+  },
+  {
+   "categories": [
+    "birds",
+    "flowers",
+    "family",
+    "sweets",
+    "fish",
+    "berries",
+    "jobs"
+   ]
+  },
+  {
+   "categories": [
+    "fruits",
+    "flowers",
+    "vehicles",
+    "clothes",
+    "shoes",
+    "insects",
+    "tools"
+   ]
+  },
+  {
+   "categories": [
+    "birds",
+    "buildings",
+    "sweets",
     "shoes",
     "fish",
-    "weather",
+    "jobs",
+    "weather"
+   ]
+  },
+  {
+   "categories": [
+    "trees",
+    "vegetables",
+    "vehicles",
+    "clothes",
+    "insects",
+    "sports",
     "music"
    ]
   }

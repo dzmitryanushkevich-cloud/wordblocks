@@ -131,28 +131,114 @@ button:disabled { opacity: 0.45; cursor: default; }
 
 .hud { padding: 14px 16px 0; }
 
-.top-row { display: flex; align-items: center; gap: 10px; }
-.top-row > :nth-child(2) { margin-left: auto; }
-.back { padding: 6px 12px; font-size: 15px; line-height: 1; }
-.icon { padding: 6px 10px; font-size: 15px; line-height: 1; }
+.top-row { display: flex; align-items: center; gap: 8px; }
+/* Подпись уровня по центру промежутка между значками слева и кошельком справа. */
+.level-name {
+  flex: 1;
+  /* Подпись должна уметь ужиматься, иначе на узком телефоне она распирает шапку
+     и выталкивает кошелёк за край. */
+  min-width: 0;
+  padding: 0 4px;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--white);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+/* На узком экране слово сокращается до «Ур. 3»: целиком оно не помещается между
+   значками и кошельком, а обрезать его многоточием — хуже, чем сократить. */
+.level-name .short { display: none; }
+/* Кнопки шапки — те же, что в нижней полосе: синие, с тёмной гранью и
+   проседанием. Полупрозрачные «призраки» читались как неактивные, хотя
+   назад и полный экран нажимают чаще всего остального. Все три — квадратные
+   значки: три подписи подряд не умещались на узком телефоне, а домик, стрелки
+   и жук понятны без слов. */
+.top-row .ghost {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: var(--white);
+  background: linear-gradient(180deg, #5aa0e8, #2f6fc0);
+  box-shadow: 0 4px 0 #1f4f8f, 0 6px 12px rgba(6, 22, 48, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  opacity: 1;
+}
+.top-row .ghost:active { box-shadow: 0 1px 0 #1f4f8f, 0 2px 6px rgba(6, 22, 48, 0.35); }
+.top-row .ghost svg.glyph {
+  width: 23px;
+  height: 23px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.wallet { flex: none; white-space: nowrap; }
+/* Узкий телефон: ужимается всё, кроме значков, — им ужиматься уже некуда. */
+@media (max-width: 400px) {
+  .hud { padding: 14px 10px 0; }
+  .top-row { gap: 6px; }
+  .top-row .ghost { width: 36px; height: 36px; border-radius: 12px; }
+  .top-row .ghost svg.glyph { width: 20px; height: 20px; }
+  .level-name { font-size: 16px; padding: 0 2px; }
+  .wallet { font-size: 17px; padding-right: 12px; gap: 5px; }
+}
+/* Ниже этой ширины «Уровень» уже не влезает между значками и кошельком. */
+@media (max-width: 370px) {
+  .level-name .long { display: none; }
+  .level-name .short { display: inline; }
+}
 
+/* Шкала цели — не плашка, а жёлоб: глубокая тёмная выемка с горящей полосой
+   внутри. Плоской она сливалась со списком найденных слов, который лежит прямо
+   под ней, и читалась как ещё одно поле, а не как главный счётчик уровня. */
 .track {
   position: relative;
   margin-top: 10px;
-  height: 32px;
-  background: var(--panel-deep);
-  border: 1px solid var(--edge);
+  height: 34px;
+  background: linear-gradient(180deg, rgba(8, 46, 62, 0.46), rgba(14, 62, 76, 0.3));
+  border: none;
   border-radius: 999px;
   overflow: hidden;
-  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.35);
+  /* Тень по верху и светлая грань по низу — дна хватает, чтобы жёлоб читался
+     утопленным. Глубже не делаем: тёмная яма спорит с фоном и выглядит дырой.
+     Тень лежит под заливкой: положенная поверх, она гасит зелёный и верх полосы
+     уходит в грязно-серый. Чтобы полоса при этом не казалась вылезающей за край,
+     она вписана в жёлоб с отступом в два пикселя. */
+  box-shadow: inset 0 3px 5px rgba(3, 20, 34, 0.32), inset 0 -2px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 .track > i {
   position: absolute;
-  inset: 0 auto 0 0;
-  background: linear-gradient(180deg, #c3f08a, #8fd14f);
-  background: var(--fill);
+  inset: 2px auto 2px 2px;
+  background: linear-gradient(180deg, #b6f766 0%, #6ede3c 45%, #2f9c15 100%);
   border-radius: 999px;
+  /* Низ полосы притемнён мягкой тенью: у жёлоба по нижнему краю идёт светлый
+     засвет, и без этого зелёный на его фоне выглядит выцветшим. Тень размытая,
+     а не гранью в ноль: жёсткая полоска сразу делает из заливки кнопку. */
+  box-shadow: inset 0 -3px 4px rgba(16, 72, 6, 0.45);
+  /* Блик обрезается по скруглению полосы, иначе он торчит из её углов. */
+  overflow: hidden;
+  /* Никаких теней у самой полосы: и тёмная нижняя грань, и свечение наружу
+     делали из неё кнопку, лежащую поверх жёлоба. Объём держат градиент
+     заливки и блик — этого достаточно. */
   transition: width 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* Блик по верху полосы: лежит поверх заливки и ничем не перекрыт, поэтому
+   читается подсветкой, а не сединой. */
+.track > i::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 9px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0));
 }
 .progress-label {
   position: absolute;
@@ -162,22 +248,40 @@ button:disabled { opacity: 0.45; cursor: default; }
   font-size: 17px;
   font-weight: 700;
   color: var(--white);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  /* Тонкая тёмная обводка: счётчик стоит и на зелёной полосе, и на пустом
+     жёлобе, и без канта одна из половин букв всегда теряется. */
+  text-shadow: -1px -1px 0 rgba(4, 24, 40, 0.75), 1px -1px 0 rgba(4, 24, 40, 0.75),
+    -1px 1px 0 rgba(4, 24, 40, 0.75), 1px 1px 0 rgba(4, 24, 40, 0.75),
+    0 2px 4px rgba(4, 24, 40, 0.45);
 }
 /* Кошелёк в шапке: монеты видно всегда, иначе цена подсказки ни о чём не говорит. */
+/* Кошелёк собран из того же материала, что шкала и поле слов: тёмный жёлоб
+   со светлым кантом. Жёлтая обводка выбивалась из экрана — золото здесь несёт
+   сама монета, а не рамка вокруг числа. */
 .wallet {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 13px 5px 7px;
+  gap: 7px;
+  /* Плашка ниже монеты, и слева у неё почти нет поля: монета выходит за кант
+     со всех сторон, как жетон, положенный сверху, — так она читается как
+     предмет, а не как иконка внутри рамки. */
+  height: 30px;
+  padding: 0 17px 0 4px;
   border-radius: 999px;
-  background: rgba(9, 18, 45, 0.7);
-  border: 1px solid rgba(255, 201, 60, 0.5);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  font-size: 16px;
+  background: linear-gradient(180deg, rgba(8, 46, 62, 0.62), rgba(14, 62, 76, 0.44));
+  border: none;
+  box-shadow: inset 0 3px 5px rgba(3, 20, 34, 0.32), inset 0 -2px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  font-size: 21px;
   font-weight: 700;
   color: #ffe9a8;
+  text-shadow: 0 2px 3px rgba(3, 20, 34, 0.55);
+}
+.wallet svg {
+  /* Отрицательное поле выносит монету за кант, а тень отделяет её от плашки. */
+  margin-left: -9px;
+  filter: drop-shadow(0 2px 3px rgba(3, 20, 34, 0.5));
 }
 .wallet.bump { animation: wallet-bump 0.45s cubic-bezier(0.2, 0.8, 0.3, 1); }
 @keyframes wallet-bump {
@@ -189,11 +293,12 @@ button:disabled { opacity: 0.45; cursor: default; }
 .words {
   margin-top: 10px;
   min-height: 109px;
-  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.18);
-  /* Плитка слова сжимается на узком экране: ПОЛИЦЕЙСКИЙ в одиннадцать букв
-     иначе вылезает за край и тянет за собой горизонтальную прокрутку. */
-  background: var(--panel-deep);
-  border: 1px solid var(--edge);
+  /* Тот же жёлоб, что у шкалы цели: две панели шапки лежат рядом и обязаны
+     быть из одного материала, иначе шапка выглядит собранной из кусков. */
+  background: linear-gradient(180deg, rgba(8, 46, 62, 0.46), rgba(14, 62, 76, 0.3));
+  border: none;
+  box-shadow: inset 0 3px 5px rgba(3, 20, 34, 0.32), inset 0 -2px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1);
   border-radius: 18px;
   padding: 13px;
   display: flex;
@@ -255,7 +360,10 @@ button:disabled { opacity: 0.45; cursor: default; }
   /* Сверху отступа нет намеренно: он оказывался вне строки со словом, и слово
      вставало на 12 пикселей ниже середины — между шкалой и подписью зазоры
      переставали быть равными. */
-  padding: 0 12px clamp(28px, 5.6vh, 56px);
+  /* Снизу отступ считаем с запасом: у блока есть кант и «толщина», которые
+     торчат ниже сетки плиток примерно на два десятка пикселей, — без запаса
+     блок на телефоне почти ложится на кнопки нижней полосы. */
+  padding: 0 12px clamp(52px, 9vh, 88px);
   overflow: hidden;
 }
 /* Нижняя часть поля: подпись категорий и сам блок, во всю ширину экрана. */
@@ -347,8 +455,8 @@ button:disabled { opacity: 0.45; cursor: default; }
 }
 .bonus:active { box-shadow: 0 1px 0 #1f4f8f, 0 2px 6px rgba(6, 22, 48, 0.35); }
 .bonus svg.star-icon {
-  width: 27px;
-  height: 27px;
+  width: 40px;
+  height: 40px;
   filter: drop-shadow(0 1px 1px rgba(8, 40, 80, 0.45));
 }
 /* Число найденного — на уголке, как счётчик непрочитанного. */
@@ -450,26 +558,56 @@ button:disabled { opacity: 0.45; cursor: default; }
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: 1px;
-  width: 78px;
+  gap: 2px;
+  width: 110px;
   height: var(--tray-btn);
-  padding: 4px 2px;
-  border-radius: 18px;
+  padding: 3px 6px;
+  border-radius: 16px;
   font-size: 12px;
   font-weight: 700;
-  color: #5a3c08;
-  background: linear-gradient(180deg, var(--gold), var(--gold-deep));
-  box-shadow: 0 4px 0 var(--gold-edge), 0 6px 12px rgba(8, 24, 19, 0.3);
+  /* Тот же синий, что у копилки: две кнопки нижней полосы должны читаться
+     как пара, а золотом в игре помечены деньги, а не действия. */
+  color: var(--white);
+  background: linear-gradient(180deg, #5aa0e8, #2f6fc0);
+  box-shadow: 0 4px 0 #1f4f8f, 0 6px 12px rgba(6, 22, 48, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  text-shadow: 0 1px 2px rgba(6, 22, 48, 0.5);
 }
-.hint:active { box-shadow: 0 1px 0 var(--gold-edge), 0 2px 6px rgba(8, 24, 19, 0.3); }
-.hint .price {
+.hint:active { box-shadow: 0 1px 0 #1f4f8f, 0 2px 6px rgba(6, 22, 48, 0.35); }
+/* Верхняя строка: лампочка прижата к левому краю, цена стоит по центру
+   оставшегося места. Так значок и цена читаются как две отдельные вещи —
+   «что это» и «сколько стоит», — а вплотную они сливаются в одну картинку. */
+.hint .hint-top {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 3px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: rgba(90, 60, 8, 0.22);
-  font-size: 11px;
+}
+.hint svg.bulb {
+  flex: none;
+  /* Лампочка стоит не вплотную к канту, но и не в середине: пары пикселей
+     хватает, чтобы она не читалась обрезанной, а вся группа «значок и цена»
+     при этом остаётся у левого края и не разъезжается по строке. */
+  margin-left: 2px;
+}
+.hint .hint-word {
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+.hint .price {
+  /* Цена забирает место правее лампочки и прижимается к ней, а не встаёт
+     по центру остатка: у правого края кнопки цифра висела сама по себе. */
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 3px;
+  color: #ffe9a8;
+  font-size: 24px;
+  /* Цифру не тонируем подложкой: на синем она и так читается, а лишняя плашка
+     в две строки уже не помещается. */
+  text-shadow: 0 1px 2px rgba(6, 22, 48, 0.6);
 }
 .hint.poor { opacity: 0.55; }
 /* Короткое сообщение о нехватке монет — над полосой, чтобы не двигать вёрстку. */
@@ -493,8 +631,8 @@ button:disabled { opacity: 0.45; cursor: default; }
 }
 
 .hint svg.bulb {
-  width: 23px;
-  height: 23px;
+  width: 35px;
+  height: 35px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
@@ -515,7 +653,10 @@ button:disabled { opacity: 0.45; cursor: default; }
 
 .thumbs {
   display: flex;
-  align-items: flex-end;
+  /* Миниатюры стоят по центру полосы, а не на общей нижней линии: они разной
+     высоты, и на узком экране ужатая очередь прижималась к самому низу экрана.
+     Центр держит её на одной оси с кнопками и счётчиком блоков. */
+  align-items: center;
   justify-self: start;
   gap: 10px;
   min-height: 51px;
@@ -585,8 +726,35 @@ button:disabled { opacity: 0.45; cursor: default; }
   .draft span { width: 44px; height: 54px; font-size: 26px; }
   .board-slot { row-gap: 44px; }
   .block-labels { min-height: 26px; font-size: clamp(17px, 5vw, 22px); }
-  .stage { padding-bottom: clamp(16px, 3vh, 28px); }
+  .stage { padding-bottom: clamp(30px, 5vh, 48px); }
   .tray { padding-bottom: 14px; }
+}
+
+/* Подсказка новичку стоит ровно там, где появится собираемое слово, поэтому
+   она вынута из потока: иначе полоса букв дёргалась бы по высоте, когда
+   подсказка гаснет. */
+.draft .tutor {
+  position: absolute;
+  margin: 0;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  /* Строго в одну строку: подсказка стоит на месте слова, и перенос делает
+     из неё абзац. Поэтому и текст короткий — категории и так написаны
+     над блоком. */
+  white-space: nowrap;
+  text-align: center;
+  font-size: clamp(18px, 6vw, 24px);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--white);
+  opacity: 0.92;
+  text-shadow: 0 2px 5px rgba(8, 40, 80, 0.75);
+  animation: tutor-in 0.45s ease-out 0.35s both;
+}
+@keyframes tutor-in {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)); }
+  to { opacity: 0.92; transform: translate(-50%, -50%); }
 }
 
 /* Края слова скругляем по первой и последней БУКВЕ, а не по первому и последнему
@@ -832,7 +1000,6 @@ button:disabled { opacity: 0.45; cursor: default; }
   100% { opacity: 0; }
 }
 
-.top-row .debug-toggle { margin-right: auto; }
 
 /* ── карта уровней и итоги ─────────────────────────────────────────── */
 
@@ -964,6 +1131,15 @@ button:disabled { opacity: 0.45; cursor: default; }
   text-shadow: 0 3px 0 rgba(6, 14, 38, 0.45), 0 6px 14px rgba(6, 14, 38, 0.45);
 }
 .card .why { margin: 0; text-align: center; opacity: 0.85; }
+/* Разбор поражения — единственный текст, который на этом экране действительно
+   читают: чего не хватило и почему уровень закончился. Поэтому крупнее
+   остального и без приглушения. */
+.card .why-lost {
+  margin: 0;
+  text-align: center;
+  font-size: 19px;
+  line-height: 1.45;
+}
 
 /* Три звезды и награда — праздничная часть карточки. */
 .stars {
@@ -1101,7 +1277,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 
 /* ── панель отладки ────────────────────────────────────────────────── */
 
-.debug-toggle { padding: 6px 10px; font-size: 11px; opacity: 0.6; }
+
 .debug {
   position: fixed;
   left: 10px;
@@ -1119,4 +1295,14 @@ button:disabled { opacity: 0.45; cursor: default; }
   overflow: auto;
 }
 .debug code { color: var(--fill); }
+/* Панель отладки живёт внутри шапки, поэтому её кнопка попадает под правило
+   квадратных значков. Здесь она обычная, с подписью. */
+.debug .ghost {
+  width: auto;
+  height: auto;
+  display: block;
+  padding: 10px 16px;
+  border-radius: 14px;
+  font-size: 14px;
+}
 `;

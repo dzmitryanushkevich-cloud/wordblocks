@@ -20,6 +20,8 @@ export interface Flight {
 interface HudProps {
   /** Номер партии: меняется на каждый запуск уровня, в том числе на повтор. */
   run: number;
+  /** Номер уровня: он же подписан по центру шапки. */
+  level: number;
   letters: number;
   goal: number;
   found: FoundEntry[];
@@ -34,7 +36,18 @@ interface HudProps {
 }
 
 /** Шапка: прогресс по буквам и найденные слова плитками, как в макете. */
-export function Hud({ run, letters, goal, found, coins, flight, hideLast, debug, onMap }: HudProps) {
+export function Hud({
+  run,
+  level,
+  letters,
+  goal,
+  found,
+  coins,
+  flight,
+  hideLast,
+  debug,
+  onMap,
+}: HudProps) {
   const ui = useUi();
   const percent = Math.min(100, Math.round((letters / goal) * 100));
   // Кошелёк подпрыгивает на каждое изменение — иначе трату легко не заметить.
@@ -50,13 +63,19 @@ export function Hud({ run, letters, goal, found, coins, flight, hideLast, debug,
   return (
     <div className="hud">
       <div className="top-row">
-        <button className="ghost back" onClick={onMap} title={ui.toMapTitle}>
-          ←
+        <button className="ghost back" onClick={onMap} title={ui.toMapTitle} aria-label={ui.toMapTitle}>
+          <HomeIcon />
         </button>
         {debug}
         <Fullscreen />
+        {/* Подпись уровня занимает весь промежуток между значками и кошельком
+            и встаёт в нём по центру: игрок должен видеть, где он находится. */}
+        <div className="level-name">
+          <span className="long">{ui.levelName(level)}</span>
+          <span className="short">{ui.levelNameShort(level)}</span>
+        </div>
         <div className={bump ? 'wallet bump' : 'wallet'}>
-          <Coin size={19} />
+          <Coin size={34} />
           {coins}
         </div>
       </div>
@@ -150,5 +169,16 @@ function WordChip({
         </span>
       ))}
     </div>
+  );
+}
+
+/** Домик: возврат к карте уровней. Значок вместо слова — в шапке тесно. */
+function HomeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="glyph" aria-hidden="true">
+      <path d="M3.6 11.2 12 4l8.4 7.2" />
+      <path d="M5.9 10.4V19a1 1 0 0 0 1 1h10.2a1 1 0 0 0 1-1v-8.6" />
+      <path d="M10 20v-4.4h4V20" />
+    </svg>
   );
 }

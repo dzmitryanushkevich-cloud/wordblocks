@@ -1,18 +1,17 @@
-/** Монета: своя, простая и плоская — в стиле плиток, а не золотой чеканки. */
+/**
+ * Монета: плоский жёлто-оранжевый кружок с тёмной гранью снизу — тем же приёмом,
+ * что и кнопки игры. Объём даёт грань, а не блики и чеканка: на размере
+ * в полтора десятка пикселей от градиентов остаётся только грязь.
+ */
 export function Coin({ size = 22 }: { size?: number }) {
   return (
     <svg className="coin" viewBox="0 0 24 24" width={size} height={size} aria-hidden="true">
-      <defs>
-        <linearGradient id="coin-face" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#ffe483" />
-          <stop offset="100%" stopColor="#f0a32a" />
-        </linearGradient>
-      </defs>
-      <circle cx="12" cy="12" r="10.5" fill="url(#coin-face)" />
-      <circle cx="12" cy="12" r="10.5" fill="none" stroke="#bf7a14" strokeWidth="1.6" />
-      <circle cx="12" cy="12" r="6.6" fill="none" stroke="#fff3bd" strokeWidth="1.5" opacity="0.9" />
-      <path d="M12 8.2 15.2 12 12 15.8 8.8 12z" fill="#fff3bd" />
-      <path d="M6.6 6.4a7.6 7.6 0 0 1 4.2-2.3" fill="none" stroke="#fff8d8" strokeWidth="1.4" strokeLinecap="round" opacity="0.8" />
+      {/* Толщина монеты: тот же кружок, сдвинутый вниз и потемнее. */}
+      <circle cx="12" cy="13.4" r="10.3" fill="#c26f12" />
+      <circle cx="12" cy="11.2" r="10.3" fill="#ffc63c" />
+      {/* Плоское поле внутри и ромб на нём — чтобы монета читалась монетой. */}
+      <circle cx="12" cy="11.2" r="7.1" fill="#ffdd7d" />
+      <path d="M12 7.5 15.5 11.2 12 14.9 8.5 11.2z" fill="#f2a01f" />
     </svg>
   );
 }

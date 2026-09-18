@@ -298,15 +298,26 @@ export function findPath(
   length: number,
   body?: readonly Coord[],
   maxTurns = Infinity,
+  /**
+   * Слово должно читаться: каждый шаг только вправо или вниз. Иначе ЛИСА лежит
+   * в блоке справа налево и выглядит как АСИЛ — на первых уровнях, пока игрок
+   * не понял правила, это не сложность, а путаница.
+   */
+  forward = false,
 ): number[] | null {
   if (length > adjacency.length) return null;
   const starts = rng.shuffled(adjacency.map((_, i) => i));
   for (const start of starts) {
     const path = [start];
     const used = new Set<number>([start]);
-    if (walk(rng, adjacency, path, used, length, body, maxTurns)) return path;
+    if (walk(rng, adjacency, path, used, length, body, maxTurns, forward)) return path;
   }
   return null;
+}
+
+/** Шаг вправо или вниз: по такому пути слово читается в обычном порядке. */
+export function isForward(body: readonly Coord[], from: number, to: number): boolean {
+  return body[to].x > body[from].x || body[to].y > body[from].y;
 }
 
 function walk(
@@ -317,18 +328,20 @@ function walk(
   length: number,
   body?: readonly Coord[],
   maxTurns = Infinity,
+  forward = false,
 ): boolean {
   if (path.length === length) return true;
   const options = rng.shuffled(adjacency[path[path.length - 1]]);
   for (const next of options) {
     if (used.has(next)) continue;
+    if (forward && body && !isForward(body, path[path.length - 1], next)) continue;
     path.push(next);
     if (body && countTurns(body, path) > maxTurns) {
       path.pop();
       continue;
     }
     used.add(next);
-    if (walk(rng, adjacency, path, used, length, body, maxTurns)) return true;
+    if (walk(rng, adjacency, path, used, length, body, maxTurns, forward)) return true;
     path.pop();
     used.delete(next);
   }

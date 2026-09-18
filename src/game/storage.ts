@@ -62,6 +62,19 @@ export function storeSave(lang: string, data: SaveData): void {
   }
 }
 
+/**
+ * Сброс прогресса: чистим запись и возвращаем пустое сохранение. Нужен отладке,
+ * чтобы проверять первые уровни и экономику с чистого листа, не роясь в хранилище.
+ */
+export function resetSave(lang: string): SaveData {
+  try {
+    localStorage.removeItem(key(lang));
+  } catch {
+    // Хранилище недоступно — в памяти всё равно начинаем сначала.
+  }
+  return { ...EMPTY };
+}
+
 /** Что уровень принёс игроку: это же показывает экран итогов. */
 export interface LevelOutcome {
   save: SaveData;

@@ -12,7 +12,7 @@ import {
 } from '../src/core/shape.js';
 import { solve } from '../src/core/solver.js';
 import { generateLevel } from '../src/core/generator.js';
-import { levelParams } from '../src/core/difficulty.js';
+import { levelParams, levelBlocks } from '../src/core/difficulty.js';
 import { extendSelection, releaseSelection, startLevel } from '../src/game/engine.js';
 import { BONUS_GOAL, BONUS_REWARD, collectBonus } from '../src/game/storage.js';
 import type { Cell } from '../src/core/types.js';
@@ -154,7 +154,8 @@ describe('генератор уровней', () => {
     for (const index of levels) {
       const level = generateLevel(content, index);
       const params = levelParams(russian.curve, index);
-      expect(level.figures).toHaveLength(5);
+      // Блоков столько, сколько велит кривая: три на знакомстве, семь к концу.
+      expect(level.figures).toHaveLength(levelBlocks(russian.curve, index));
 
       level.figures.forEach((figure, i) => {
         const adjacency = buildAdjacency(figure.cells);

@@ -120,12 +120,16 @@ export function HintButton({
       onClick={onClick}
       title={ui.hintTitle}
     >
-      <Bulb />
-      {ui.hint}
-      <span className="price">
-        <Coin size={12} />
-        {ui.hintCost(price)}
+      {/* Первая строка — лампочка и цена: взгляд сразу цепляет, во что это
+          обойдётся. Само слово стоит ниже и работает подписью к значку. */}
+      <span className="hint-top">
+        <Bulb />
+        <span className="price">
+          <Coin size={15} />
+          {ui.hintCost(price)}
+        </span>
       </span>
+      <span className="hint-word">{ui.hint}</span>
     </button>
   );
 }

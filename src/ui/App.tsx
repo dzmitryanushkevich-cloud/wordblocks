@@ -16,6 +16,7 @@ import {
   collectBonus,
   applyResult,
   loadSave,
+  resetSave,
   spendCoins,
   type LevelOutcome,
   type SaveData,
@@ -48,12 +49,24 @@ const REJECT_MS = 700;
 /** Цена подсказки в монетах. Бесплатная подсказка обесценивает поиск. */
 const HINT_PRICE = 25;
 
+/**
+ * Уровень, на котором игра открывается: последний доступный. Сброшенный
+ * прогресс — это `unlocked = 1`, поэтому отдельного случая для него нет.
+ */
+function latestLevel(content: GameContent, save: SaveData): GameState {
+  const index = Math.min(Math.max(1, save.unlocked), LEVEL_COUNT);
+  return startLevel(generateLevel(content, index, { gameSeed: 1 }));
+}
+
 export function App() {
   const content = useContent();
   const ui = useUi();
   const { dictionary, pack } = content;
   const [save, setSave] = useState<SaveData>(() => loadSave(pack.id));
-  const [game, setGame] = useState<GameState | null>(null);
+  // Игра открывается сразу на последнем доступном уровне, а не на карте: игрок
+  // почти всегда возвращается доигрывать, и лишний экран между ним и блоком —
+  // это лишнее касание. Карта остаётся по кнопке «назад» в шапке.
+  const [game, setGame] = useState<GameState | null>(() => latestLevel(content, save));
   const [seedNudge, setSeedNudge] = useState(0);
   // Счётчик запусков уровня: по нему интерфейс понимает, что партия новая.
   const [run, setRun] = useState(0);
@@ -95,6 +108,15 @@ export function App() {
     },
     [content, seedNudge],
   );
+
+  /** Сброс прогресса из отладки: чистим сохранение и начинаем с первого уровня. */
+  const resetProgress = useCallback(() => {
+    const empty = resetSave(pack.id);
+    setSave(empty);
+    setBonusOpen(false);
+    setSeedNudge(0);
+    openLevel(1, 0);
+  }, [openLevel, pack.id]);
 
   // Порядок после найденного слова: пауза с подсветкой → полёт букв → следующая фигура.
   useEffect(() => {
@@ -148,27 +170,6 @@ export function App() {
   const figure = currentFigure(game);
   const draft = selectionWord(game);
   const shown = draft || rejected?.word || '';
-
-  const takeAnchor = () => {
-    const path = figure.words.find((w) => w.word === figure.anchor)?.path ?? [];
-    const tiles = document.querySelectorAll('.board .tile');
-    const size = tiles[0]?.getBoundingClientRect().width ?? 0;
-    const points = path.map((cell) => {
-      const rect = tiles[cell]?.getBoundingClientRect();
-      return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : { x: 0, y: 0 };
-    });
-    setGame((current) => {
-      if (!current) return current;
-      const result = releaseSelection({ ...current, selection: path }, dictionary);
-      if (result.accepted) {
-        // Полёт прошлого слова уже отыграл — гасим его, иначе новое слово
-        // сочтут улетевшим и подсветка снимется мгновенно.
-        setFlight(null);
-        pending.current = { word: result.word, points, size, gap: GAP };
-      }
-      return result.state;
-    });
-  };
 
   /** Подсказка платная: списываем монеты только если она действительно новая. */
   const askHint = () => {
@@ -230,6 +231,7 @@ export function App() {
       <Backdrop level={game.level.index} />
       <Hud
         run={run}
+        level={game.level.index}
         letters={game.letters}
         goal={game.level.goalLetters}
         found={game.found}
@@ -239,15 +241,7 @@ export function App() {
         debug={
           // Пока открыто окно итогов, панель отладки убираем: она его перекрывает.
           game.phase === 'won' || game.phase === 'lost' ? null : (
-            <Debug
-              state={game}
-              onSolve={takeAnchor}
-              onRegenerate={() => {
-                const nudge = seedNudge + 1;
-                setSeedNudge(nudge);
-                openLevel(game.level.index, nudge);
-              }}
-            />
+            <Debug state={game} onReset={resetProgress} />
           )
         }
         onMap={() => setGame(null)}
@@ -265,6 +259,14 @@ export function App() {
           {/* Слово языка, но не из темы: блок стоит, а слово уходит в копилку. */}
           {rejected?.kind === 'off-theme' && !draft && (
             <em className="kept">{rejected.repeat ? ui.bonusAgain : ui.bonusFound}</em>
+          )}
+          {/* Первый уровень: пока игрок не повёл пальцем, на месте собираемого
+              слова стоит подсказка, что вообще надо делать. Она гаснет с первой
+              же буквой и возвращается с новым блоком. */}
+          {game.level.index === 1 && game.phase === 'playing' && !shown && (
+            <p className="tutor" key={`tutor-${game.figureIndex}`}>
+              {ui.tutorHint}
+            </p>
           )}
         </div>
 
@@ -311,7 +313,9 @@ export function App() {
         <Queue
           index={game.figureIndex}
           total={game.level.figures.length}
-          upcoming={game.level.figures.slice(game.figureIndex + 1)}
+          /* В очереди показываем не больше четырёх ближайших блоков: на поздних
+             уровнях их семь, и все сразу ужимаются до нечитаемых крошек. */
+          upcoming={game.level.figures.slice(game.figureIndex + 1, game.figureIndex + 5)}
         />
 
       </div>
@@ -350,7 +354,6 @@ export function App() {
           leaving={leaving}
           onRetry={() => leave(() => openLevel(game.level.index))}
           onNext={() => leave(() => openLevel(game.level.index + 1))}
-          onMap={() => leave(() => setGame(null))}
         />
       )}
     </>
@@ -437,10 +440,9 @@ interface ResultProps {
   leaving: boolean;
   onRetry: () => void;
   onNext: () => void;
-  onMap: () => void;
 }
 
-function Result({ ui, state, outcome, leaving, onRetry, onNext, onMap }: ResultProps) {
+function Result({ ui, state, outcome, leaving, onRetry, onNext }: ResultProps) {
   const won = state.phase === 'won';
   const played = state.outcomes.length;
   const total = state.level.figures.length;
@@ -468,7 +470,7 @@ function Result({ ui, state, outcome, leaving, onRetry, onNext, onMap }: ResultP
         {/* На победе всё лишнее убрано: это праздник, а не разбор партии.
             На поражении наоборот — важно понять, чего не хватило. */}
         {!won && (
-          <p>
+          <p className="why-lost">
             {ui.collected(state.letters, state.level.goalLetters)}
             {early && ui.lostEarly}
           </p>
@@ -484,9 +486,9 @@ function Result({ ui, state, outcome, leaving, onRetry, onNext, onMap }: ResultP
               {ui.retry}
             </button>
           )}
-          <button className="ghost" onClick={onMap}>
-            {ui.toMap}
-          </button>
+          {/* Кнопки к карте в окне итогов нет ни в победе, ни в поражении:
+              в ряду должно стоять одно действие, а уйти на карту можно
+              домиком в шапке. */}
         </div>
       </div>
     </div>
