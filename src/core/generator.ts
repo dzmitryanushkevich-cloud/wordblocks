@@ -14,6 +14,7 @@ import { levelParams } from './difficulty.js';
 import type { Cell, Figure, Level, WordHit } from './types.js';
 import {
   categoryPool,
+  categoryWords,
   figureLabels,
   levelTheme,
   siblingForms,
@@ -80,6 +81,13 @@ export function generateFigure(
   shun: ReadonlySet<string> = new Set(),
   /** Пары «единственное — множественное»: обе формы в одном блоке не нужны. */
   siblings: ReadonlyMap<string, string> = new Map(),
+  /**
+   * Сколько ещё форм перебрать, когда годный блок с огрехом уже отложен.
+   * На коротких уровнях блоков мало, а слов в ядре категорий совсем чуть-чуть,
+   * поэтому там ищем дольше: лишние попытки стоят миллисекунды, а первые уровни
+   * игрок разглядывает внимательнее всего.
+   */
+  patience = SPARE_PATIENCE,
 ): Figure | null {
   // Тема для проверки блока — всегда вся тема уровня: засчитывается она целиком,
   // и слово длиннее якоря из «чужой» категории сделало бы блок непроходимым.
@@ -143,7 +151,7 @@ export function generateFigure(
     // Запасной вариант уже есть — ищем чистый ещё немного и уходим. Иногда
     // чистого не существует вовсе (короткое слово темы осталось одно, и оно
     // уже найдено), и без этой границы генератор перебирал бы блок секундами.
-    if (spare && shapeTry > spareAt + SPARE_PATIENCE) break;
+    if (spare && shapeTry > spareAt + patience) break;
     const body = growShape(rng, params);
     if (!body || isBoring(body)) continue;
     const adjacency = buildAdjacency(body);
@@ -245,11 +253,22 @@ function plantTemptation(
     params.temptationLength,
     Math.min(nearest, params.temptationLength + 2),
   );
+  /**
+   * Слово, которое тянет за собой чужую категорию. Не только само: ТОК читается
+   * задом наперёд как КОТ, и солвер найдёт в блоке оба. Подложив ТОК в блок
+   * «птицы», мы тем самым подкладываем туда и зверя.
+   */
+  const drags = (word: string): boolean =>
+    shun.has(word) || shun.has([...word].reverse().join(''));
+
   for (let length = params.temptationLength; length <= longest; length++) {
-    const fresh = themed.filter((word) => word.length === length && word !== anchor);
+    const fresh = themed.filter((word) => word.length === length && word !== anchor && !drags(word));
     // Когда свежих слов этой длины в теме не осталось, берём уже встречавшееся:
     // повтор ЛУКА в двух блоках честнее, чем блок с одним-единственным ответом.
-    const pool = fresh.length > 0 ? fresh : repeats.filter((word) => word.length === length && word !== anchor);
+    const pool =
+      fresh.length > 0
+        ? fresh
+        : repeats.filter((word) => word.length === length && word !== anchor && !drags(word));
     const placed = tryPlace(
       rng, cells, adjacency, protectedCells, pool, params.readable, params.crossing,
     );
@@ -260,7 +279,7 @@ function plantTemptation(
   // на незнакомое слово никто не клюнет.
   const candidates = dictionary
     .core(params.temptationLength, params.anchorPool)
-    .filter((word) => !shun.has(word));
+    .filter((word) => !drags(word));
   return tryPlace(
     rng, cells, adjacency, protectedCells, candidates, params.readable, params.crossing,
   );
@@ -558,6 +577,7 @@ export function generateLevel(
   // Прячем слова по кривой, а засчитываем любые слова темы: если редкое слово
   // сложилось случайно, оно всё равно из категории и обязано считаться.
   const siblings = siblingForms(pack.themes);
+  const patience = SPARE_PATIENCE;
   const pool = themeWords(pack.themes, theme, params.poolDepth);
   const inTheme = new Set(themeScoring(pack.themes, theme));
 
@@ -585,15 +605,7 @@ export function generateLevel(
    * при пяти категориях как раз и разводит соседей: {1,3}, {2,4}, {3,5}, {4,1},
    * {5,2} — ни одна пара не пересекается с соседней.
    */
-  const duoPool = (index: number): string[] => {
-    const own = byCategory[index % byCategory.length];
-    // Пара нужна там, где категорий много. На коротких уровнях их три, и шаг
-    // через одну упирается в категорию соседнего блока: первый блок разбирал
-    // слова третьего, а тому потом не из чего было выбирать.
-    if (byCategory.length < 4) return [...own];
-    const mate = byCategory[(index + 2) % byCategory.length];
-    return [...new Set([...own, ...mate])];
-  };
+  const duoPool = (index: number): string[] => [...byCategory[index % byCategory.length]];
 
   for (const [figureIndex, figureParams] of params.figures.entries()) {
     const turn = byCategory[figureIndex % byCategory.length];
@@ -602,16 +614,31 @@ export function generateLevel(
     // Пара категорий должна быть достаточно широкой, иначе приманок не хватит
     // и блок выродится в одно длинное слово.
     const temptPool = duo.length >= 8 ? duo : pool;
-    // Запасной список: вся тема, но без категорий предыдущего блока. Трёхбуквенных
-    // слов в категориях единицы, и без этого вычитания блок за блоком тянул одно
-    // и то же ходовое слово — ЛЕВ, КОТ — а с ним и повтор подписи.
+    /*
+     * Чужая категория уровня в блоке не нужна вовсе: каждая стоит ровно в одном
+     * блоке, поэтому её слово, попавшее в чужой блок, — это всегда возвращение.
+     * «Овощи · Семья» в первом блоке и «Семья» в третьем читаются как повтор,
+     * хотя соседями не стоят. Поэтому вычитаем слова всех остальных категорий
+     * уровня разом, а не только соседних, и вместе с множественным числом:
+     * ЕЛИ — такие же деревья, как ЕЛЬ.
+     *
+     * Но у блока обязано быть слово темы короче якоря — иначе выбирать не из
+     * чего. Если в своей категории такого слова нет вовсе (у птиц нет ни одного
+     * трёхбуквенного), запрет пришлось бы соблюдать ценой непроходимого блока.
+     * Тогда он смягчается до соседних блоков: возвращение через блок — меньшее
+     * зло, чем блок без выбора.
+     */
+    const mine = theme.categories[figureIndex % theme.categories.length];
+    const ownShort = ownPool.some((word) => word.length < figureParams.anchorLength);
     const before = figures[figures.length - 1]?.labels ?? [];
-    // Заодно вычитаем категорию следующего блока: иначе она успевает мелькнуть
-    // в подписи раньше, чем до неё дойдёт очередь, и соседи снова совпадают.
-    const ahead = theme.categories[(figureIndex + 1) % theme.categories.length];
-    const banned = new Set(
-      [...before, ahead].flatMap((id) => categoryPool(pack.themes, id, 'all')),
-    );
+    // Категория следующего блока — но без «по кругу»: за последним блоком уровня
+    // никого нет, и запрещать там первую категорию значит отнимать у блока
+    // последний доступный вариант.
+    const ahead = theme.categories[figureIndex + 1];
+    const bannedIds = ownShort
+      ? theme.categories.filter((id) => id !== mine)
+      : [...before, ...(ahead ? [ahead] : [])].filter((id) => id !== mine);
+    const banned = new Set(bannedIds.flatMap((id) => categoryWords(pack.themes, id)));
     const widePool = pool.filter((word) => !banned.has(word));
     // Якорь блока из этого списка, конечно, исключаем: сам блок про свою категорию.
     const shun = new Set([...banned].filter((word) => !ownPool.includes(word)));
@@ -635,12 +662,12 @@ export function generateLevel(
 
       let made = generateFigure(
         rng, dictionary, figureParams, usedAnchors, pool, ownPool, temptPool, widePool, taken,
-        shun, siblings,
+        shun, siblings, patience,
       );
       for (let relax = 1; !made && relax <= 3; relax++) {
         made = generateFigure(
           rng, dictionary, looser(relax), usedAnchors, pool, ownPool, temptPool, widePool,
-          taken, shun, siblings,
+          taken, shun, siblings, patience,
         );
       }
       // Приманок в паре категорий не хватило — берём их из всей темы,
@@ -652,12 +679,12 @@ export function generateLevel(
       if (!made && temptPool !== pool) {
         made = generateFigure(
           rng, dictionary, figureParams, usedAnchors, pool, ownPool, pool, widePool, taken,
-          shun, siblings,
+          shun, siblings, patience,
         );
         for (let relax = 1; !made && relax <= 3; relax++) {
           made = generateFigure(
             rng, dictionary, looser(relax), usedAnchors, pool, ownPool, pool, widePool, taken,
-            shun, siblings,
+            shun, siblings, patience,
           );
         }
       }
@@ -678,13 +705,17 @@ export function generateLevel(
       for (const category of done.labels) seen.set(category, (seen.get(category) ?? 0) + 1);
     }
     /**
-     * Что считаем однобокостью: категория стоит в подписи соседнего блока или
-     * уже была в двух блоках уровня. Пара категорий почти это и снимает, но
-     * солвер находит в блоке и незапланированные слова темы — «лев» и «кот»
-     * складываются где угодно, — и они тоже попадают в подпись.
+     * Что считаем однобокостью. Дороже всего повтор подписи у соседнего блока:
+     * два блока подряд про одно и то же читаются как ошибка. Но и возвращение
+     * категории через блок заметно — «Овощи · Семья», потом «Семья · Овощи»
+     * выглядят одинаково, хотя соседями не стоят. Поэтому любое повторное
+     * появление категории в уровне тоже стоит денег, просто втрое дешевле.
      */
     const dullness = (labels: readonly string[]): number =>
-      labels.filter((c) => previous.includes(c) || (seen.get(c) ?? 0) >= 2).length;
+      labels.reduce(
+        (sum, c) => sum + (previous.includes(c) ? 3 : 0) + (seen.get(c) ?? 0),
+        0,
+      );
 
     /**
      * Цена варианта блока. Дороже всего повтор слова темы: его засчитают второй
@@ -696,7 +727,7 @@ export function generateLevel(
       const words = made.words.map((w) => w.word);
       const repeats = words.filter((word) => already.has(word));
       const themed = repeats.filter((word) => inTheme.has(word)).length;
-      return themed * 6 + (repeats.length - themed) + dullness(figureLabels(pack.themes, words, theme)) * 3;
+      return themed * 6 + (repeats.length - themed) + dullness(figureLabels(pack.themes, words, theme));
     };
 
     // Блок пересобираем несколько раз и оставляем самый дешёвый: безупречного
@@ -738,4 +769,20 @@ export function generateLevel(
   const goalLetters = Math.min(maxLetters, Math.max(floor, Math.round(maxLetters * params.goalRatio)));
 
   return { index: levelIndex, seed, theme, figures, goalLetters, maxLetters };
+}
+
+/**
+ * Блок «последнего шанса»: ещё одна фигура для проигранного уровня. Тема и
+ * сложность те же, что у первого блока уровня, а сид другой — иначе игрок
+ * получил бы ровно тот блок, с которого начинал.
+ *
+ * Отдельный уровень из одной фигуры мы и строим: так у блока честно считаются
+ * и подпись, и засчитываемые слова, и ни одно правило генератора не обходится.
+ */
+export function generateRescue(content: GameContent, levelIndex: number, seed = 1): Figure {
+  const level = generateLevel(content, levelIndex, {
+    gameSeed: 101 + seed,
+    figureCount: 1,
+  });
+  return level.figures[0];
 }

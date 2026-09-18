@@ -147,6 +147,9 @@ export interface UiStrings {
   lostEarly: string;
   next: string;
   retry: string;
+  /** Последний шанс: блок за просмотр рекламы на экране поражения. */
+  lastChance: string;
+  plusBlock: string;
   /** Копилка слов не из темы: заголовок окна, подписи и награда. */
   bonusTitle: string;
   bonusButtonTitle: string;

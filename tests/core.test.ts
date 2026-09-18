@@ -11,7 +11,8 @@ import {
   readWord,
 } from '../src/core/shape.js';
 import { solve } from '../src/core/solver.js';
-import { generateLevel } from '../src/core/generator.js';
+import { generateLevel, generateRescue } from '../src/core/generator.js';
+import { addRescue, canRescue } from '../src/game/engine.js';
 import { levelParams, levelBlocks } from '../src/core/difficulty.js';
 import { extendSelection, releaseSelection, startLevel } from '../src/game/engine.js';
 import { BONUS_GOAL, BONUS_REWARD, collectBonus } from '../src/game/storage.js';
@@ -239,5 +240,39 @@ describe('копилка слов не из темы', () => {
     for (let i = 1; i < BONUS_GOAL; i++) data = collectBonus('test', data, `слово${i}`).save;
     expect(data.bonus.length).toBe(BONUS_GOAL);
     expect(data.coins).toBe(BONUS_REWARD);
+  });
+});
+
+describe('последний шанс', () => {
+  const content = createContent(russian);
+
+  it('блок предлагается, только если с ним достаётся цель', () => {
+    const level = generateLevel(content, 1);
+    const state = startLevel(level);
+    const figure = generateRescue(content, 1);
+
+    // Ничего не собрано: одного блока на весь уровень заведомо мало.
+    expect(canRescue(state, figure)).toBe(false);
+
+    // Не хватает ровно длины якоря — блок спасает.
+    const close = { ...state, letters: level.goalLetters - figure.anchor.length };
+    expect(canRescue(close, figure)).toBe(true);
+
+    // Не хватает на букву больше — уже нет.
+    const far = { ...state, letters: level.goalLetters - figure.anchor.length - 1 };
+    expect(canRescue(far, figure)).toBe(false);
+  });
+
+  it('подаренный блок продолжает партию, а цель не двигает', () => {
+    const level = generateLevel(content, 1);
+    const state = { ...startLevel(level), phase: 'lost' as const };
+    const figure = generateRescue(content, 1);
+    const next = addRescue(state, figure);
+
+    expect(next.phase).toBe('playing');
+    expect(next.level.figures).toHaveLength(level.figures.length + 1);
+    expect(next.figureIndex).toBe(level.figures.length);
+    expect(next.level.goalLetters).toBe(level.goalLetters);
+    expect(next.level.maxLetters).toBe(level.maxLetters + figure.anchor.length);
   });
 });

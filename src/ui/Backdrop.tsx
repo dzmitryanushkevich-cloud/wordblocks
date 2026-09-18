@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { sceneFor, type Scene } from './scenes.js';
 
 interface BackdropProps {
@@ -13,7 +13,7 @@ const FADE_MS = 900;
  * Задник игры. Картинок две только в момент смены главы: новая проявляется
  * поверх старой, иначе на её месте на полсекунды зияла бы голая заливка.
  */
-export function Backdrop({ level }: BackdropProps) {
+function BackdropInner({ level }: BackdropProps) {
   const scene = sceneFor(level);
   const [layers, setLayers] = useState<Scene[]>([scene]);
 
@@ -39,3 +39,7 @@ export function Backdrop({ level }: BackdropProps) {
     </div>
   );
 }
+
+/** Задник меняется раз в десять уровней, а перерисовывался с каждой буквой.
+    Обёртка `memo` отсекает перерисовки, вызванные только выделением букв. */
+export const Backdrop = memo(BackdropInner);

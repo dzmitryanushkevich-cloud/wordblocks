@@ -51,7 +51,7 @@ export const russian: LanguagePack = {
     },
     // Первые уровни читаются как написано: слово лежит слева направо.
     readableUntil: 2,
-    tangleFrom: 5,
+    tangleFrom: 3,
     coreUntil: 3,
     commonUntil: 12,
     shapeStages: [4, 9],

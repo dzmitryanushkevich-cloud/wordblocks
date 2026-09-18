@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { memo, type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 import type { FoundEntry } from '../game/engine.js';
 import { Fullscreen } from './Fullscreen.js';
 import { useUi } from './content.js';
@@ -36,7 +36,7 @@ interface HudProps {
 }
 
 /** Шапка: прогресс по буквам и найденные слова плитками, как в макете. */
-export function Hud({
+function HudInner({
   run,
   level,
   letters,
@@ -182,3 +182,7 @@ function HomeIcon() {
     </svg>
   );
 }
+
+/** Шапка живёт своей жизнью: буквы, монеты, полёт слова.
+    Обёртка `memo` отсекает перерисовки, вызванные только выделением букв. */
+export const Hud = memo(HudInner);

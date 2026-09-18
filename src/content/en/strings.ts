@@ -6,23 +6,23 @@ const plural = (count: number, one: string, many: string): string =>
 export const en: UiStrings = {
   title: 'WordBlocks',
   intro: [
-    'Every level has two categories — they are printed above the block, and only their ' +
-      'words count. A block hides several of them, but you may take one: the moment a word ' +
-      'is found, the block crumbles with everything else inside. Progress is counted in ' +
-      'letters, so a short word is letters lost. Five blocks per level.',
-    'Trace a word by swiping across neighbouring tiles: up, down, left, right. No diagonals.',
+    'A block lists its categories above it — only their words count. ' +
+      'Connect a word by swiping across neighbouring tiles, no diagonals.',
+    'Several words fit, but you take one: it crumbles the block along with the rest. ' +
+      'The goal counts letters, so a short word is letters lost.',
+    'A word outside the categories goes to your collection and pays coins, and coins buy hints.',
   ],
   build: (stamp) => `build ${stamp}`,
   locked: '🔒',
   noResult: '—',
-  toMap: 'levels',
+  toMap: 'Levels',
   toMapTitle: 'back to the level map',
-  fullscreen: 'full screen',
-  fullscreenExit: 'exit',
+  fullscreen: 'Full screen',
+  fullscreenExit: 'Exit',
   fullscreenTitle: 'play full screen',
-  hint: 'hint',
+  hint: 'Hint',
   hintTitle: 'light up the first letter of the long word',
-  tutorHint: 'Find a long word',
+  tutorHint: 'Connect letters into a word',
   blockWord: 'Block',
   blockOf: (index, total) => `${index} of ${total}`,
   levelName: (index) => `Level ${index}`,
@@ -36,8 +36,10 @@ export const en: UiStrings = {
   notEnoughCoins: 'Not enough coins',
   collected: (letters, goal) => `${plural(letters, 'letter', 'letters')} of ${goal} collected.`,
   lostEarly: ' The remaining blocks could not cover the goal, so the level ended early.',
-  next: 'next level',
-  retry: 'try again',
+  next: 'Next level',
+  retry: 'Try again',
+  lastChance: 'Last chance',
+  plusBlock: '+1 block',
   bonusTitle: 'Extra words',
   bonusButtonTitle: 'words outside the theme you found along the way',
   bonusHere: 'On this level:',
@@ -47,5 +49,5 @@ export const en: UiStrings = {
   bonusPaid: (coins) => `+${coins} for the collection`,
   bonusFound: 'collected',
   bonusAgain: 'already found',
-  bonusClose: 'got it',
+  bonusClose: 'Got it',
 };

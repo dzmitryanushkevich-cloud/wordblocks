@@ -1,18 +1,23 @@
 import { useEffect, useState } from 'react';
-import type { GameState } from '../game/engine.js';
-import { currentFigure } from '../game/engine.js';
+import { PACKS, rememberChoice } from '../content/index.js';
+import type { Figure } from '../core/types.js';
 
 interface DebugProps {
-  state: GameState;
+  /** Текущий блок. Раньше панель брала всё состояние партии и из-за этого
+      перерисовывалась на каждое движение пальца: смотреть ей нужен только блок. */
+  figure: Figure;
+  onLose: () => void;
   onReset: () => void;
 }
 
 /**
- * Панель отладки. В ней только два дела: посмотреть, какие слова лежат в блоке,
- * и сбросить прогресс. Всё остальное — сид, счётчики, авто-проход — было нужно,
- * пока настраивался генератор, а на глаз мешало.
+ * Панель отладки. Дел в ней три: посмотреть слова блока, переключить язык
+ * и оборвать партию — проиграть уровень на месте, чтобы посмотреть экран
+ * поражения и «последний шанс», не доигрывая до него руками. Плюс сброс
+ * прогресса. Всё остальное — сид, счётчики, авто-проход — было нужно, пока
+ * настраивался генератор, а на глаз мешало.
  */
-export function Debug({ state, onReset }: DebugProps) {
+export function Debug({ figure, onLose, onReset }: DebugProps) {
   const [open, setOpen] = useState(false);
   // Сброс спрашивает подтверждение вторым нажатием: промах по кнопке рядом
   // с «другим сидом» стоил бы всего пройденного. Через три секунды забывает.
@@ -22,7 +27,6 @@ export function Debug({ state, onReset }: DebugProps) {
     const timer = setTimeout(() => setArmed(false), 3000);
     return () => clearTimeout(timer);
   }, [armed]);
-  const figure = currentFigure(state);
 
   return (
     <>
@@ -37,7 +41,7 @@ export function Debug({ state, onReset }: DebugProps) {
       {open && (
         <div className="debug">
           <div>
-            слова блока:{' '}
+            Слова блока:{' '}
             {figure.words.map((w) => (
               <span key={w.word}>
                 {/* Жёлтым — слова не из темы: они не рассыпают блок, а идут в копилку. */}
@@ -46,6 +50,12 @@ export function Debug({ state, onReset }: DebugProps) {
                 </code>{' '}
               </span>
             ))}
+          </div>
+          <LanguagePicker />
+          <div className="row">
+            <button className="ghost" onClick={onLose}>
+              Проиграть уровень
+            </button>
           </div>
           <div className="row">
             <button
@@ -59,7 +69,7 @@ export function Debug({ state, onReset }: DebugProps) {
                 onReset();
               }}
             >
-              {armed ? 'точно сбросить?' : 'сбросить прогресс'}
+              {armed ? 'Точно сбросить?' : 'Сбросить прогресс'}
             </button>
           </div>
         </div>
@@ -77,5 +87,30 @@ function BugIcon() {
       <path d="M8 11.2H4.6M16 11.2h3.4M8 15.4H4.6M16 15.4h3.4M9.6 5.2 8.2 3.2M14.4 5.2l1.4-2" />
       <path d="M12 8.4v10.8" />
     </svg>
+  );
+}
+
+/**
+ * Переключатель языка. Живёт в отладке, а не на карте уровней: игроку он не
+ * нужен — язык берётся из браузера, — а проверять вторую сборку удобно.
+ * В одноязычной сборке его просто нет.
+ */
+function LanguagePicker() {
+  if (PACKS.length < 2) return null;
+  return (
+    <div className="row langs">
+      {PACKS.map((pack) => (
+        <button
+          key={pack.id}
+          className="ghost"
+          onClick={() => {
+            rememberChoice(pack.id);
+            location.reload();
+          }}
+        >
+          {pack.name}
+        </button>
+      ))}
+    </div>
   );
 }

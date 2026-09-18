@@ -356,6 +356,11 @@ button:disabled { opacity: 0.45; cursor: default; }
      и подписью категорий снизу; прижатое к какому-нибудь краю, оно читается
      как часть шкалы или как часть подписи. */
   grid-template-rows: 1fr auto;
+  /* Колонка ровно по экрану. Без этого длинное собираемое слово (а буква в нём
+     шириной с плитку) делало колонку шире экрана, и блок, выровненный по её
+     центру, уезжал вбок прямо под пальцем — на девятибуквенном слове почти
+     на треть клетки. */
+  grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   /* Сверху отступа нет намеренно: он оказывался вне строки со словом, и слово
      вставало на 12 пикселей ниже середины — между шкалой и подписью зазоры
@@ -705,15 +710,20 @@ button:disabled { opacity: 0.45; cursor: default; }
   align-items: center;
   justify-content: center;
   min-height: 72px;
+  max-width: 100%;
 }
+/* Буква собираемого слова: обычно с плитку шириной, но длинное слово ужимается
+   по экрану. Число букв приходит из разметки (--letters): без него слово из
+   девяти букв просто не помещается и распирает страницу. Высота при этом не
+   меняется — иначе блок подпрыгивал бы на каждой букве. */
 .draft span {
-  width: 60px;
+  width: min(60px, calc((100vw - 30px) / var(--letters, 1)));
   height: 72px;
   display: grid;
   place-items: center;
   background: var(--tile);
   color: var(--ink);
-  font-size: 34px;
+  font-size: min(34px, calc((100vw - 30px) / var(--letters, 1) * 0.56));
   font-weight: 700;
   box-shadow: 0 6px 0 var(--tile-edge);
 }
@@ -954,50 +964,29 @@ button:disabled { opacity: 0.45; cursor: default; }
 }
 .tile.hinted { box-shadow: inset 0 0 0 3px var(--fill); }
 
+/*
+ * Кусочек летит одним элементом и одним преобразованием. Раньше их было три
+ * вложенных — по слою на ось, на вращение и на затухание, — потому что на одном
+ * элементе может быть только одно transform. Но каждый слой телефон выносит в
+ * отдельную композиторскую поверхность, и на большом блоке их набиралось под
+ * три сотни: рассыпание начинало дёргаться. Дуга собрана в один набор кадров,
+ * у каждого отрезка своё замедление — вбок кусочек уходит ровно, вверх подлетает
+ * и тормозит, вниз падает с ускорением.
+ */
+/*
+ * Кусочек летит одним элементом: раньше их было три вложенных — по слою на ось,
+ * на вращение и на затухание, — потому что на одном элементе может быть только
+ * одно transform. Каждый слой телефон выносит в отдельную композиторскую
+ * поверхность, и на большом блоке их набиралось под три сотни. Сам полёт
+ * навешивает поле числами (см. Board.tsx): кадры с переменными css считает
+ * на главном потоке, а числа уезжают на композитор.
+ */
 .shard {
   position: absolute;
   z-index: 1;
-  animation: shard-x 1.05s linear forwards;
-}
-/* Каждый слой двигает свою ось: иначе преобразования перетирают друг друга. */
-.shard i {
-  display: block;
-  width: 100%;
-  height: 100%;
-  animation: shard-y 1.05s forwards;
-}
-.shard b {
-  display: block;
-  width: 100%;
-  height: 100%;
   background: var(--tile);
   border-radius: 4px;
   box-shadow: 0 1px 0 var(--tile-edge);
-  animation: shard-spin 1.05s linear forwards, shard-fade 1.05s forwards;
-}
-
-@keyframes shard-x {
-  to { transform: translateX(var(--dx)); }
-}
-@keyframes shard-y {
-  0% {
-    transform: translateY(0);
-    animation-timing-function: cubic-bezier(0.12, 0.66, 0.4, 1);
-  }
-  26% {
-    transform: translateY(var(--up));
-    animation-timing-function: cubic-bezier(0.55, 0, 0.9, 1);
-  }
-  100% {
-    transform: translateY(var(--dy));
-  }
-}
-@keyframes shard-spin {
-  to { transform: rotate(var(--rot)) scale(0.82); }
-}
-@keyframes shard-fade {
-  0%, 74% { opacity: 1; }
-  100% { opacity: 0; }
 }
 
 
@@ -1024,16 +1013,21 @@ button:disabled { opacity: 0.45; cursor: default; }
 .screen p { margin: 0; line-height: 1.5; opacity: 0.92; }
 
 /* Вступление стоит на плашке: длинный текст поверх яркого неба не читается. */
+/* Правила набраны мельче основного текста: их читают один раз, а место на карте
+   нужно уровням — до них не должно приходиться прокручивать пол-экрана. */
 .intro {
   background: var(--panel-deep);
   border: 1px solid var(--edge);
   border-radius: 18px;
-  padding: 14px 16px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.4;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
+.intro p { margin: 0; }
 .build { font-size: 12px; opacity: 0.7; margin: 0; }
 /* Переключатель языка: его нет, пока в сборке один пакет. */
 .langs { display: flex; gap: 8px; }
@@ -1203,6 +1197,63 @@ button:disabled { opacity: 0.45; cursor: default; }
 }
 /* Кнопки итогов стоят столбиком: главная широкая, как в жанре принято.
    Нижняя грань и проседание при нажатии — та самая «объёмность» жанра. */
+/* Последний шанс: кнопка за просмотр рекламы. Слева значок ролика, по центру
+   надпись, справа белая миниатюра блока с подписью «+1 блок» — игрок должен
+   видеть, что именно ему дадут, не читая. */
+.rescue {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #5aa0e8, #2f6fc0);
+  box-shadow: 0 5px 0 #1f4f8f, 0 8px 16px rgba(6, 22, 48, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.rescue:active { box-shadow: 0 1px 0 #1f4f8f, 0 3px 8px rgba(6, 22, 48, 0.4); }
+.rescue b {
+  font-size: 17px;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  text-shadow: 0 2px 0 rgba(6, 22, 48, 0.45);
+}
+.rescue .ad-icon {
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linejoin: round;
+}
+.rescue .ad-icon .play { fill: currentColor; stroke-width: 1.2; }
+/* Миниатюра блока белая, а не кремовая: это награда, и она должна светиться. */
+.prize-block {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  min-width: 52px;
+}
+.prize-block svg {
+  width: calc(var(--w) * 11px);
+  height: calc(var(--h) * 11px);
+  max-width: 46px;
+  max-height: 34px;
+  overflow: visible;
+  filter: drop-shadow(0 2px 3px rgba(6, 22, 48, 0.55));
+}
+.prize-block .rim { fill: #1f4f8f; stroke: #1f4f8f; stroke-width: 0.76; }
+.prize-block .body { fill: #ffffff; stroke: #ffffff; stroke-width: 0.5; }
+.prize-block i {
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-shadow: -1px -1px 0 rgba(6, 22, 48, 0.7), 1px -1px 0 rgba(6, 22, 48, 0.7),
+    -1px 1px 0 rgba(6, 22, 48, 0.7), 1px 1px 0 rgba(6, 22, 48, 0.7),
+    0 2px 3px rgba(6, 22, 48, 0.5);
+}
+
 .row { display: grid; gap: 10px; margin-top: 4px; }
 .row .big {
   padding: 16px 18px;
@@ -1297,6 +1348,9 @@ button:disabled { opacity: 0.45; cursor: default; }
 .debug code { color: var(--fill); }
 /* Панель отладки живёт внутри шапки, поэтому её кнопка попадает под правило
    квадратных значков. Здесь она обычная, с подписью. */
+/* Языки стоят в строку: их два, и вертикально они занимают пол-панели. */
+.debug .langs { display: flex; gap: 8px; }
+.debug .langs .ghost { flex: 1; }
 .debug .ghost {
   width: auto;
   height: auto;

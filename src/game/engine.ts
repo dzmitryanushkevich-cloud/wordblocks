@@ -172,6 +172,39 @@ export function finishCrumble(state: GameState): GameState {
   };
 }
 
+/**
+ * Поможет ли ещё один блок. Лучшее, что он может дать, — длина его якоря;
+ * если и с ней до цели не дотянуться, предлагать нечего. Обещать спасение
+ * и не спасти хуже, чем не обещать вовсе.
+ */
+export function canRescue(state: GameState, figure: Figure): boolean {
+  return state.letters + figure.anchor.length >= state.level.goalLetters;
+}
+
+/**
+ * Последний шанс: к проигранному уровню добавляется ещё один блок, и партия
+ * продолжается с него. Цель при этом не двигается — двигается потолок: игрок
+ * получает не поблажку, а лишний ход.
+ */
+export function addRescue(state: GameState, figure: Figure): GameState {
+  const level: Level = {
+    ...state.level,
+    figures: [...state.level.figures, figure],
+    maxLetters: state.level.maxLetters + figure.anchor.length,
+  };
+  return {
+    ...state,
+    level,
+    figureIndex: level.figures.length - 1,
+    adjacency: buildAdjacency(figure.cells),
+    selection: [],
+    hintCells: [],
+    phase: 'playing',
+    lastWord: null,
+    lastPath: [],
+  };
+}
+
 /** Подсказка: подсвечиваем первую букву самого длинного слова фигуры. */
 export function useHint(state: GameState): GameState {
   if (state.phase !== 'playing') return state;

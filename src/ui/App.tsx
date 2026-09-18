@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { generateLevel } from '../core/generator.js';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { generateLevel, generateRescue } from '../core/generator.js';
 import {
+  addRescue,
+  canRescue,
   currentFigure,
   extendSelection,
   finishCrumble,
@@ -22,6 +24,7 @@ import {
   type SaveData,
 } from '../game/storage.js';
 import { Board } from './Board.js';
+import { outlinePath } from './outline.js';
 import { Hud, type Flight } from './Hud.js';
 import { Debug } from './Debug.js';
 import { Backdrop } from './Backdrop.js';
@@ -33,8 +36,8 @@ import { BUILD } from './version.js';
 import { levelTheme } from '../core/themes.js';
 import { useContent, useUi } from './content.js';
 import type { GameContent } from '../core/content.js';
+import type { Figure } from '../core/types.js';
 import type { UiStrings } from '../content/types.js';
-import { PACKS, rememberChoice } from '../content/index.js';
 
 const LEVEL_COUNT = 30;
 // Слово найдено → клетки слова застывают подсвеченными, вокруг осыпается фигура,
@@ -89,6 +92,11 @@ export function App() {
   // показывает именно его, а не разницу кошелька.
   const [outcome, setOutcome] = useState<LevelOutcome | null>(null);
   const [poor, setPoor] = useState(false);
+  // Блок «последнего шанса» готовим заранее, когда уровень проигран: кнопку
+  // показываем только если этот блок правда может вытянуть партию.
+  const [rescue, setRescue] = useState<Figure | null>(null);
+  // Один шанс за уровень: иначе реклама превращается в бесконечные ходы.
+  const [rescueUsed, setRescueUsed] = useState(false);
   // Копилка слов не из темы: открыта ли она и надо ли мигнуть звездой.
   const [bonusOpen, setBonusOpen] = useState(false);
   const [bonusBump, setBonusBump] = useState(false);
@@ -103,6 +111,8 @@ export function App() {
       setDeparted(0);
       setRejected(null);
       setOutcome(null);
+      setRescue(null);
+      setRescueUsed(false);
       pending.current = null;
       setGame(startLevel(level));
     },
@@ -117,6 +127,49 @@ export function App() {
     setSeedNudge(0);
     openLevel(1, 0);
   }, [openLevel, pack.id]);
+
+  /*
+   * Всё, что не зависит от выделения, получает постоянные ссылки. Игра держит
+   * партию одним объектом состояния, и каждая буква свайпа его обновляет: без
+   * этого шапка, очередь и задник перерисовывались бы на каждое движение пальца
+   * вместе с полем, хотя показывают ровно то же самое. На телефоне это как раз
+   * та работа, из-за которой выделение букв ощущается вязким.
+   */
+  const onMap = useCallback(() => setGame(null), []);
+  const onLose = useCallback(
+    () => setGame((current) => (current ? { ...current, phase: 'lost' as const } : current)),
+    [],
+  );
+  const onPickCell = useCallback(
+    (cell: number) => setGame((g) => (g ? extendSelection(g, cell) : g)),
+    [],
+  );
+  const openBonus = useCallback(() => setBonusOpen(true), []);
+
+  // Текущий блок: ссылка на него живёт, пока блок не сменится, — на неё
+  // опираются и панель отладки, и мемоизация поля.
+  const figure = game ? currentFigure(game) : null;
+  const upcoming = useMemo(
+    () => (game ? game.level.figures.slice(game.figureIndex + 1, game.figureIndex + 5) : []),
+    [game?.level, game?.figureIndex],
+  );
+  // Пока открыто окно итогов, панель отладки убираем: она его перекрывает.
+  const debugPanel = useMemo(
+    () =>
+      figure && game && game.phase !== 'won' && game.phase !== 'lost' ? (
+        <Debug figure={figure} onLose={onLose} onReset={resetProgress} />
+      ) : null,
+    [figure, game?.phase, onLose, resetProgress],
+  );
+
+  // Уровень проигран — считаем, поможет ли ещё один блок. Лучшее, что он может
+  // дать, — длина его якоря; если и с ней до цели не дотянуться, предлагать
+  // нечего, и кнопки не будет.
+  useEffect(() => {
+    if (!game || game.phase !== 'lost' || rescueUsed) return;
+    const figure = generateRescue(content, game.level.index);
+    setRescue(canRescue(game, figure) ? figure : null);
+  }, [game?.phase, game?.level.index, rescueUsed]);
 
   // Порядок после найденного слова: пауза с подсветкой → полёт букв → следующая фигура.
   useEffect(() => {
@@ -157,7 +210,7 @@ export function App() {
     setSave(result.save);
   }, [game?.phase]);
 
-  if (!game) {
+  if (!game || !figure) {
     // На карте за спиной стоит пейзаж той главы, до которой игрок дошёл.
     return (
       <>
@@ -167,7 +220,6 @@ export function App() {
     );
   }
 
-  const figure = currentFigure(game);
   const draft = selectionWord(game);
   const shown = draft || rejected?.word || '';
 
@@ -238,13 +290,8 @@ export function App() {
         coins={save.coins}
         flight={flight}
         hideLast={game.phase === 'crumbling' && flight === null}
-        debug={
-          // Пока открыто окно итогов, панель отладки убираем: она его перекрывает.
-          game.phase === 'won' || game.phase === 'lost' ? null : (
-            <Debug state={game} onReset={resetProgress} />
-          )
-        }
-        onMap={() => setGame(null)}
+        debug={debugPanel}
+        onMap={onMap}
       />
 
       <div className="stage">
@@ -252,6 +299,8 @@ export function App() {
           className={
             rejected && !draft ? `draft ${rejected.kind === 'off-theme' ? 'alien' : 'bad'}` : 'draft'
           }
+          /* Сколько букв в слове — по этому числу буква ужимается по экрану. */
+          style={{ ['--letters' as string]: Math.max(1, shown.length) }}
         >
           {[...shown].map((letter, i) => (
             <span key={i}>{letter.toUpperCase()}</span>
@@ -291,7 +340,7 @@ export function App() {
                 crumbling={game.phase === 'crumbling'}
                 taken={game.lastPath}
                 departed={departed}
-                onPick={(cell) => setGame((g) => (g ? extendSelection(g, cell) : g))}
+                onPick={onPickCell}
                 onRelease={handleRelease}
               />
             )}
@@ -305,7 +354,7 @@ export function App() {
           <BonusButton
             count={game.bonus.length}
             ready={bonusBump}
-            onClick={() => setBonusOpen(true)}
+            onClick={openBonus}
           />
           <HintButton price={HINT_PRICE} affordable={save.coins >= HINT_PRICE} onClick={askHint} />
         </div>
@@ -315,7 +364,7 @@ export function App() {
           total={game.level.figures.length}
           /* В очереди показываем не больше четырёх ближайших блоков: на поздних
              уровнях их семь, и все сразу ужимаются до нечитаемых крошек. */
-          upcoming={game.level.figures.slice(game.figureIndex + 1, game.figureIndex + 5)}
+          upcoming={upcoming}
         />
 
       </div>
@@ -354,6 +403,17 @@ export function App() {
           leaving={leaving}
           onRetry={() => leave(() => openLevel(game.level.index))}
           onNext={() => leave(() => openLevel(game.level.index + 1))}
+          rescue={rescue}
+          onRescue={() => {
+            const figure = rescue;
+            if (!figure) return;
+            setRescueUsed(true);
+            setRescue(null);
+            leave(() => {
+              setOutcome(null);
+              setGame((current) => (current ? addRescue(current, figure) : current));
+            });
+          }}
         />
       )}
     </>
@@ -377,7 +437,6 @@ function LevelMap({ content, save, onPick }: LevelMapProps) {
         ))}
         <p className="build">{ui.build(BUILD)}</p>
       </div>
-      <LanguagePicker current={content.pack.id} />
       <div className="levels">
         {Array.from({ length: LEVEL_COUNT }, (_, i) => i + 1).map((index) => {
           const result = save.results[index];
@@ -407,30 +466,6 @@ function LevelMap({ content, save, onPick }: LevelMapProps) {
   );
 }
 
-/**
- * Переключатель языка. Показывается, только когда в сборке больше одного пакета,
- * поэтому в одноязычной сборке его просто нет.
- */
-function LanguagePicker({ current }: { current: string }) {
-  if (PACKS.length < 2) return null;
-  return (
-    <div className="langs">
-      {PACKS.map((pack) => (
-        <button
-          key={pack.id}
-          className={pack.id === current ? 'lang on' : 'lang ghost'}
-          onClick={() => {
-            rememberChoice(pack.id);
-            location.reload();
-          }}
-        >
-          {pack.name}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 interface ResultProps {
   ui: UiStrings;
   state: GameState;
@@ -440,9 +475,12 @@ interface ResultProps {
   leaving: boolean;
   onRetry: () => void;
   onNext: () => void;
+  /** Блок, который даст реклама. null — значит он не спасёт, и кнопки нет. */
+  rescue: Figure | null;
+  onRescue: () => void;
 }
 
-function Result({ ui, state, outcome, leaving, onRetry, onNext }: ResultProps) {
+function Result({ ui, state, outcome, leaving, onRetry, onNext, rescue, onRescue }: ResultProps) {
   const won = state.phase === 'won';
   const played = state.outcomes.length;
   const total = state.level.figures.length;
@@ -486,6 +524,26 @@ function Result({ ui, state, outcome, leaving, onRetry, onNext }: ResultProps) {
           </>
         )}
 
+        {/* Последний шанс: блок за рекламу. Кнопка появляется только когда этот
+            блок правда доводит до цели — обещать спасение и не спасти хуже,
+            чем не обещать. */}
+        {!won && rescue && (
+          <button className="rescue" onClick={onRescue}>
+            <AdIcon />
+            <b>{ui.lastChance}</b>
+            <span className="prize-block">
+              <svg
+                viewBox={`-0.4 -0.4 ${rescue.width + 0.8} ${rescue.height + 0.8}`}
+                style={{ ['--w' as string]: `${rescue.width}`, ['--h' as string]: `${rescue.height}` }}
+              >
+                <path className="rim" d={outlinePath(rescue.cells, 1, 1, 0, 0)} />
+                <path className="body" d={outlinePath(rescue.cells, 1, 1, 0, 0)} />
+              </svg>
+              <i>{ui.plusBlock}</i>
+            </span>
+          </button>
+        )}
+
         <div className="row">
           {won ? (
             <button className="big" onClick={onNext}>
@@ -502,5 +560,15 @@ function Result({ ui, state, outcome, leaving, onRetry, onNext }: ResultProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Значок рекламного ролика: экран с треугольником «плей». */
+function AdIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="ad-icon" aria-hidden="true">
+      <rect x="2.5" y="4.5" width="19" height="15" rx="3.2" />
+      <path d="M10 9.4 15.2 12 10 14.6z" className="play" />
+    </svg>
   );
 }

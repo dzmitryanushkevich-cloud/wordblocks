@@ -111,6 +111,82 @@ await page.mouse.up();
 assert.ok((await progress()).startsWith('0 /'), 'свайп из двух букв не должен давать букв');
 assert.deepEqual(await foundWords(), [], 'свайп из двух букв не должен попадать в список');
 
+// 1.2. Хитбокс клетки после первой буквы сужен до ядра. Ведём палец по прямой
+// A → B → D, но у клетки B чуть заезжаем в перпендикулярную клетку C — так и
+// промахивается живой палец. Раньше C попадала в слово и рвала цепочку: D ей уже
+// не соседняя, и вместо ABD игрок получал ABC. Возврат через середину B тут не
+// спасает — палец идёт дальше, а не назад.
+const trap = (() => {
+  const at = new Map(cells.map((t, i) => [`${t.gx},${t.gy}`, i]));
+  const axes = [
+    { line: [1, 0], cross: [0, 1] },
+    { line: [1, 0], cross: [0, -1] },
+    { line: [0, 1], cross: [1, 0] },
+    { line: [0, 1], cross: [-1, 0] },
+  ];
+  for (let i = 0; i < cells.length; i++) {
+    for (const { line, cross } of axes) {
+      const back = at.get(`${cells[i].gx - line[0]},${cells[i].gy - line[1]}`);
+      const ahead = at.get(`${cells[i].gx + line[0]},${cells[i].gy + line[1]}`);
+      const side = at.get(`${cells[i].gx + cross[0]},${cells[i].gy + cross[1]}`);
+      if (back !== undefined && ahead !== undefined && side !== undefined) {
+        return { from: back, middle: i, out: ahead, side, cross };
+      }
+    }
+  }
+  return null;
+})();
+if (trap) {
+  const middle = cells[trap.middle];
+  const pitch = Math.abs(cells[trap.out].cx - middle.cx) + Math.abs(cells[trap.out].cy - middle.cy);
+  // Точка сразу за границей соседней клетки: заезд мелкий, но настоящий.
+  const graze = {
+    x: middle.cx + trap.cross[0] * (pitch / 2 + 8),
+    y: middle.cy + trap.cross[1] * (pitch / 2 + 8),
+  };
+  await page.mouse.move(cells[trap.from].cx, cells[trap.from].cy);
+  await page.mouse.down();
+  await page.mouse.move(middle.cx, middle.cy, { steps: 6 });
+  await page.mouse.move(graze.x, graze.y, { steps: 4 });
+  await page.mouse.move(cells[trap.out].cx, cells[trap.out].cy, { steps: 6 });
+  const drafted = await page.evaluate(
+    () => document.querySelector('.draft')?.textContent.trim().toLowerCase() ?? '',
+  );
+  await page.mouse.up();
+  await page.waitForTimeout(400);
+  assert.equal(
+    drafted,
+    cells[trap.from].letter + middle.letter + cells[trap.out].letter,
+    `мелкий заезд в соседнюю клетку не должен попадать в слово, набралось «${drafted.toUpperCase()}»`,
+  );
+}
+
+// 1.3. Длинное собираемое слово не должно двигать блок. Буква в слове шириной
+// с плитку, и на девяти буквах строка вылезала за экран: колонка сцены
+// становилась шире, а выровненный по её центру блок уезжал вбок прямо под
+// пальцем. Подставляем длинное слово руками — своими свайпами до девяти букв
+// на первом уровне не добраться.
+const boardLeft = () => page.evaluate(() => Math.round(document.querySelector('.board').getBoundingClientRect().left));
+const restLeft = await boardLeft();
+const wide = await page.evaluate(() => {
+  const draft = document.querySelector('.draft');
+  draft.style.setProperty('--letters', '11');
+  const added = [];
+  for (let i = 0; i < 11; i++) {
+    const letter = document.createElement('span');
+    letter.textContent = 'Ж';
+    draft.appendChild(letter);
+    added.push(letter);
+  }
+  const left = Math.round(document.querySelector('.board').getBoundingClientRect().left);
+  const over = Math.round(draft.getBoundingClientRect().width - document.documentElement.clientWidth);
+  added.forEach((n) => n.remove());
+  draft.style.removeProperty('--letters');
+  return { left, over };
+});
+assert.equal(wide.left, restLeft, 'длинное слово не должно сдвигать блок');
+assert.ok(wide.over <= 0, `длинное слово не должно вылезать за экран, вылезло на ${wide.over}px`);
+
 // 1.5. Слово не из темы: блок стоит, а слово уходит в копилку.
 await page.click('.debug-toggle');
 const alien = await page.evaluate(() => {

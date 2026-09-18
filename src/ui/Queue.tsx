@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import type { Figure } from '../core/types.js';
 import { outlinePath } from './outline.js';
 import { useUi } from './content.js';
@@ -29,7 +29,7 @@ interface QueueProps {
  * Миниатюры рисуются тем же контуром, что и сама деталь, поэтому форму
  * следующего блока видно заранее — можно прикинуть, что там за слово.
  */
-export function Queue({ index, total, upcoming }: QueueProps) {
+function QueueInner({ index, total, upcoming }: QueueProps) {
   const ui = useUi();
   const ref = useRef<HTMLDivElement>(null);
   // Очередь занимает всё, что осталось в полосе после подсказки и счётчика.
@@ -125,7 +125,7 @@ export function HintButton({
       <span className="hint-top">
         <Bulb />
         <span className="price">
-          <Coin size={15} />
+          <Coin size={16} />
           {ui.hintCost(price)}
         </span>
       </span>
@@ -144,3 +144,7 @@ function Bulb() {
     </svg>
   );
 }
+
+/** Очередь меняется только при смене блока.
+    Обёртка `memo` отсекает перерисовки, вызванные только выделением букв. */
+export const Queue = memo(QueueInner);

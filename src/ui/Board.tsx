@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import type { Figure } from '../core/types.js';
 import { outlinePath } from './outline.js';
 
@@ -22,6 +22,26 @@ const BOTTOM_AIR = BLEED + 12;
    поэтому на маленьком экране высокий блок всё же ужимается. */
 const MIN_CELL = 26;
 const MAX_CELL = 82;
+/** Кегль буквы в клетке: от него же считается ядро клетки, см. CORE. */
+const LETTER = 0.46;
+/**
+ * Ядро клетки: круг в её середине размером чуть больше самой буквы (доля от шага
+ * сетки). Первое касание ловится всей клеткой — игрок ставит палец осознанно и
+ * в одну точку, — а дальше по пути засчитывается только ядро. Клетки стоят
+ * вплотную, и на всю ширину они ловят палец краем: ведя пальцем наискось, его
+ * почти невозможно не пронести через чужую клетку, и в слово лезла буква,
+ * которую никто не выбирал. Между ядрами остаётся мёртвая полоса, и промах по
+ * ней ничего не стоит — клетка засчитается следующей точкой пути, тогда как
+ * лишняя буква портит слово целиком и рвёт цепочку: следующая клетка ей уже
+ * не соседняя. Круг, а не квадрат: угол чужой клетки в круг не попадает,
+ * а прямой путь по ряду идёт ровно через середину.
+ *
+ * Ровно по букве (LETTER) ядро делать нельзя: при таком ядре свайп, идущий
+ * с постоянным сносом в треть клетки, не засчитывал вообще ничего. Запас
+ * в одну десятую держит косой свайп и всё ещё оставляет мёртвую полосу
+ * примерно в пятую часть клетки.
+ */
+const CORE = LETTER + 0.1;
 
 /** Псевдослучайное, но стабильное число из индекса: одна и та же фигура рассыпается одинаково. */
 function jitter(seed: number): number {
@@ -54,7 +74,9 @@ function sparks(figure: Figure, taken: number[], cell: number, pitch: number) {
     sides.forEach((side, sideIndex) => {
       if (inWord.has(`${x + side.dx},${y + side.dy}`)) return; // сторона внутри слова
 
-      for (let k = 0; k < 2; k++) {
+      // У большого блока искр вдвое меньше: каждая — отдельный элемент со своим
+      // свечением, а в куче они всё равно читаются как одна вспышка.
+      for (let k = 0; k < (taken.length > 4 ? 1 : 2); k++) {
         const seed = i * 29 + sideIndex * 7 + k;
         // Точка на стороне: середина плюс смещение вдоль неё.
         const along = (jitter(seed) - 0.5) * cell * 0.8;
@@ -93,21 +115,37 @@ function sparks(figure: Figure, taken: number[], cell: number, pitch: number) {
   return pieces;
 }
 
+/** Один летящий кусочек: где лежал и куда его унесло. */
+interface Shard {
+  key: string;
+  left: number;
+  top: number;
+  size: number;
+  delay: number;
+  dx: number;
+  up: number;
+  dy: number;
+  rot: number;
+}
+
 /**
  * Осколки фигуры. Каждая клетка, кроме клеток найденного слова, распадается
- * на девять кусочков.
+ * на кусочки и разлетается.
  *
- * Полёт разложен по осям, иначе движение выглядит как рывок по прямой:
- * вбок кусочек уходит равномерно, вверх подлетает и тормозит, вниз падает
- * с ускорением — получается дуга. Вращение и затухание живут своим слоем,
- * потому что на одном элементе может быть только одно преобразование.
+ * Полёт — дуга: вбок кусочек уходит ровно, вверх подлетает и тормозит, вниз
+ * падает с ускорением. Считаем только числа; саму анимацию вешает поле — см.
+ * `useLayoutEffect` в `Board`, там же объяснено, почему не через css.
  */
-function shards(figure: Figure, cell: number, pitch: number, taken: number[]) {
-  const grid = 3;
+function shards(figure: Figure, cell: number, pitch: number, taken: number[]): Shard[] {
+  // Крупный блок сыплется той же горстью, что и мелкий: на семи-восьми клетках
+  // сетка 3×3 даёт под сотню летящих кусочков, каждый со своим слоем, и телефон
+  // на этом захлёбывается. Отдельный кусочек в такой куче всё равно не разглядеть,
+  // поэтому у большого блока он просто крупнее.
+  const grid = figure.cells.length - taken.length > 5 ? 2 : 3;
   const size = Math.ceil(cell / grid);
   const step = (cell - size) / (grid - 1);
   const skip = new Set(taken);
-  const pieces = [];
+  const pieces: Shard[] = [];
 
   for (let i = 0; i < figure.cells.length; i++) {
     if (skip.has(i)) continue;
@@ -123,37 +161,25 @@ function shards(figure: Figure, cell: number, pitch: number, taken: number[]) {
         const outX = column - (grid - 1) / 2;
         const outY = row - (grid - 1) / 2;
 
-        const dx = cellDx + outX * (60 + jitter(seed) * 90) + (jitter(seed + 11) * 2 - 1) * 55;
-        const up = -(cellUp + Math.max(0, -outY) * 30 + jitter(seed + 5) * 45);
-        const dy = 300 + jitter(seed + 17) * 260 + outY * 20;
-        const rot = (jitter(seed + 23) * 2 - 1) * 320;
-
-        pieces.push(
-          <div
-            key={`${i}-${row}-${column}`}
-            className="shard"
-            style={{
-              left: x * pitch + Math.round(column * step),
-              top: y * pitch + Math.round(row * step),
-              width: size,
-              height: size,
-              animationDelay: `${(i % 5) * 35 + jitter(seed + 3) * 80}ms`,
-              ['--dx' as string]: `${Math.round(dx)}px`,
-              ['--up' as string]: `${Math.round(up)}px`,
-              ['--dy' as string]: `${Math.round(dy)}px`,
-              ['--rot' as string]: `${Math.round(rot)}deg`,
-            }}
-          >
-            <i>
-              <b />
-            </i>
-          </div>,
-        );
+        pieces.push({
+          key: `${i}-${row}-${column}`,
+          left: x * pitch + Math.round(column * step),
+          top: y * pitch + Math.round(row * step),
+          size,
+          delay: (i % 5) * 35 + jitter(seed + 3) * 80,
+          dx: Math.round(cellDx + outX * (60 + jitter(seed) * 90) + (jitter(seed + 11) * 2 - 1) * 55),
+          up: -Math.round(cellUp + Math.max(0, -outY) * 30 + jitter(seed + 5) * 45),
+          dy: Math.round(300 + jitter(seed + 17) * 260 + outY * 20),
+          rot: Math.round((jitter(seed + 23) * 2 - 1) * 320),
+        });
       }
     }
   }
   return pieces;
 }
+
+/** Сколько летит кусочек. Столько же стоит в css у затухания. */
+const SHARD_MS = 1050;
 
 interface BoardProps {
   figure: Figure;
@@ -176,6 +202,12 @@ interface BoardProps {
  */
 export function Board({ figure, selection, hintCells, crumbling, taken, departed, onPick, onRelease }: BoardProps) {
   const ref = useRef<HTMLDivElement>(null);
+  /** Где палец был в прошлый раз: между двумя точками достраиваем путь. */
+  const trail = useRef<{ x: number; y: number } | null>(null);
+  /** Клетка, о которой уже сказали выделению: подряд одну и ту же не повторяем. */
+  const reported = useRef<number | undefined>(undefined);
+  /** Рамка поля на время одного свайпа: см. cellAt. */
+  const frame = useRef<DOMRect | null>(null);
   const [box, setBox] = useState({ width: 0, height: 0, cell: 0, gap: GAP });
 
   /**
@@ -221,6 +253,8 @@ export function Board({ figure, selection, hintCells, crumbling, taken, departed
           Math.floor((availableHeight - GAP * (figure.height - 1)) / figure.height),
         ),
       );
+      // Поле переехало или изменилось — запомненная рамка больше не годится.
+      frame.current = null;
       setBox({
         cell,
         gap: GAP,
@@ -241,20 +275,62 @@ export function Board({ figure, selection, hintCells, crumbling, taken, departed
     return map;
   }, [figure]);
 
-  /** Клетка под пальцем: считаем по сетке, поэтому зазоры тоже попадают в ближнюю плитку. */
+  /**
+   * Клетка под пальцем. Считаем по сетке, поэтому зазоры тоже попадают в ближнюю
+   * плитку. `strict` сужает клетку до ядра: точка вне круга в середине не
+   * принадлежит никакой клетке, и между соседями остаётся мёртвая полоса.
+   */
   const cellAt = useCallback(
-    (clientX: number, clientY: number): number | undefined => {
+    (clientX: number, clientY: number, strict = false): number | undefined => {
       const node = ref.current;
       if (!node) return undefined;
-      const rect = node.getBoundingClientRect();
-      const x = Math.floor(((clientX - rect.left) / rect.width) * figure.width);
-      const y = Math.floor(((clientY - rect.top) / rect.height) * figure.height);
+      // Рамку поля берём ту, что запомнили в момент касания. Свайп спрашивает
+      // клетку десятки раз за кадр, а getBoundingClientRect заставляет браузер
+      // доверстать страницу, чтобы ответить честно. Поле за время одного свайпа
+      // никуда не уезжает: страница не прокручивается, выезд блока к этому
+      // моменту закончился.
+      const rect = frame.current ?? node.getBoundingClientRect();
+      const fx = ((clientX - rect.left) / rect.width) * figure.width;
+      const fy = ((clientY - rect.top) / rect.height) * figure.height;
+      const x = Math.floor(fx);
+      const y = Math.floor(fy);
+      if (strict) {
+        const dx = fx - x - 0.5;
+        const dy = fy - y - 0.5;
+        if (dx * dx + dy * dy > (CORE / 2) * (CORE / 2)) return undefined;
+      }
       return index.get(`${x},${y}`);
     },
     [figure, index],
   );
 
+  /**
+   * Палец от прошлой точки до нынешней. Идём отрезком, а не прыгаем: шаг в
+   * четверть клетки гарантирует, что ядро по дороге не перескочит даже быстрый
+   * рывок. Каждое попадание отдаём в выделение — лишние повторы оно само гасит.
+   */
+  const walk = (point: { x: number; y: number }): void => {
+    const from = trail.current ?? point;
+    const dx = point.x - from.x;
+    const dy = point.y - from.y;
+    const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / Math.max(4, (box.cell + box.gap) / 4)));
+    for (let i = 1; i <= steps; i++) {
+      const cell = cellAt(from.x + (dx * i) / steps, from.y + (dy * i) / steps, true);
+      if (cell === undefined) continue;
+      // Палец идёт внутри одной клетки десятком точек подряд. Дёргать состояние
+      // партии на каждую незачем: выделение всё равно отбросит повтор, но React
+      // успеет прогнать проверку по всему дереву. Повтор отсекаем здесь.
+      if (cell === reported.current) continue;
+      reported.current = cell;
+      onPick(cell);
+    }
+    trail.current = point;
+  };
+
   const release = (): void => {
+    trail.current = null;
+    reported.current = undefined;
+    frame.current = null;
     const node = ref.current;
     const points = node
       ? selection.map((cell) => {
@@ -269,19 +345,105 @@ export function Board({ figure, selection, hintCells, crumbling, taken, departed
   const handleDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (crumbling) return;
     ref.current?.setPointerCapture(event.pointerId);
+    frame.current = ref.current?.getBoundingClientRect() ?? null;
+    trail.current = { x: event.clientX, y: event.clientY };
+    reported.current = undefined;
+    // Первая буква ловится всей клеткой: игрок ставит палец осознанно и в одну
+    // точку, промахнуться мимо ядра тут было бы обидно на ровном месте.
     const cell = cellAt(event.clientX, event.clientY);
     if (cell !== undefined) onPick(cell);
   };
 
-  const handleMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (crumbling || selection.length === 0) return;
-    const cell = cellAt(event.clientX, event.clientY);
-    if (cell !== undefined) onPick(cell);
-  };
+  /*
+   * Движение пальца слушаем напрямую у элемента, а не через onPointerMove.
+   * React ловит события на корне документа и на каждое прогоняет свою машинерию
+   * синтетических событий — на нажатии это незаметно, но движений в секунду
+   * приходит под сотню, и именно они тормозят выделение на телефоне. Нажатие
+   * и отпускание остаются обычными: они редкие.
+   *
+   * Обработчик ставится один раз на блок, поэтому всё изменчивое он берёт
+   * из `live`, а не из замыкания.
+   */
+  const live = useRef({ crumbling, idle: selection.length === 0, walk });
+  useEffect(() => {
+    live.current = { crumbling, idle: selection.length === 0, walk };
+  });
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const move = (event: PointerEvent): void => {
+      const now = live.current;
+      if (now.crumbling || now.idle) return;
+      // Браузер отдаёт движение редкими кадрами, а точки между ними копит
+      // отдельно. Берём их все: с узким ядром пропущенный кадр — это
+      // пропущенная клетка, а она рвёт цепочку, потому что следующая уже
+      // не соседняя.
+      const points =
+        typeof event.getCoalescedEvents === 'function'
+          ? event.getCoalescedEvents().map((step) => ({ x: step.clientX, y: step.clientY }))
+          : [];
+      if (points.length === 0) points.push({ x: event.clientX, y: event.clientY });
+      for (const point of points) now.walk(point);
+    };
+    node.addEventListener('pointermove', move, { passive: true });
+    return () => node.removeEventListener('pointermove', move);
+  }, []);
 
   const pitch = box.cell + box.gap;
-  const plate =
-    box.cell > 0 ? outlinePath(figure.cells, pitch, pitch, -box.gap / 2, -box.gap / 2) : '';
+  const flying = useMemo(
+    () => (crumbling && box.cell > 0 ? shards(figure, box.cell, pitch, taken) : []),
+    [crumbling, figure, box.cell, pitch, taken],
+  );
+  /*
+   * Полёт кусочков заводим руками, а не классом в css. Причина одна: в css
+   * путь каждого кусочка приходится передавать через свои переменные
+   * (`--dx`, `--dy`, …), а кадры с `var()` браузер не умеет отдавать
+   * композитору — он пересчитывает их на главном потоке каждый кадр, вместе
+   * со стилями всего блока. На горсти кусочков это и есть та самая дёрганость
+   * рассыпания. Тот же полёт, выписанный числами, уезжает на композитор
+   * и главный поток не трогает вовсе.
+   */
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node || flying.length === 0) return;
+    const parts = node.querySelectorAll<HTMLElement>('.shard');
+    if (typeof parts[0]?.animate !== 'function') return; // очень старый браузер: пусть просто лежат
+    flying.forEach((shard, i) => {
+      const part = parts[i];
+      if (!part) return;
+      part.animate(
+        [
+          {
+            offset: 0,
+            transform: 'translate(0px, 0px) rotate(0deg)',
+            easing: 'cubic-bezier(0.12, 0.66, 0.4, 1)',
+          },
+          {
+            offset: 0.26,
+            transform: `translate(${Math.round(shard.dx * 0.26)}px, ${shard.up}px) rotate(${Math.round(shard.rot * 0.26)}deg)`,
+            easing: 'cubic-bezier(0.55, 0, 0.9, 1)',
+          },
+          {
+            offset: 1,
+            transform: `translate(${shard.dx}px, ${shard.dy}px) rotate(${shard.rot}deg) scale(0.82)`,
+          },
+        ],
+        { duration: SHARD_MS, delay: shard.delay, fill: 'forwards' },
+      );
+      part.animate([{ opacity: 1, offset: 0 }, { opacity: 1, offset: 0.74 }, { opacity: 0 }], {
+        duration: SHARD_MS,
+        delay: shard.delay,
+        fill: 'forwards',
+      });
+    });
+  }, [flying]);
+
+  // Контур подложки не зависит от выделения, а строка пути у большого блока
+  // длинная: пересобирать её на каждое движение пальца незачем.
+  const plate = useMemo(
+    () => (box.cell > 0 ? outlinePath(figure.cells, pitch, pitch, -box.gap / 2, -box.gap / 2) : ''),
+    [figure, pitch, box.cell, box.gap],
+  );
   // Пока фигура осыпается, клетки найденного слова стоят на месте и остаются
   // подсвеченными — слово «застывает» на секунду, и только потом буквы улетают.
   // Слово держится на месте, пока его буквы не улетели. Каждая улетевшая буква
@@ -306,7 +468,6 @@ export function Board({ figure, selection, hintCells, crumbling, taken, departed
       ref={ref}
       style={{ width: box.width, height: box.height }}
       onPointerDown={handleDown}
-      onPointerMove={handleMove}
       onPointerUp={release}
       onPointerCancel={release}
     >
@@ -357,7 +518,7 @@ export function Board({ figure, selection, hintCells, crumbling, taken, departed
               top: cell.y * pitch,
               width: box.cell,
               height: box.cell,
-              fontSize: Math.round(box.cell * 0.46),
+              fontSize: Math.round(box.cell * LETTER),
             }}
           >
             {cell.letter.toUpperCase()}
@@ -365,8 +526,14 @@ export function Board({ figure, selection, hintCells, crumbling, taken, departed
         ),
       )}
 
-      {/* Рассыпание: каждая клетка распадается на четыре осколка и разлетается. */}
-      {crumbling && box.cell > 0 && shards(figure, box.cell, pitch, taken)}
+      {/* Рассыпание: каждая клетка распадается на кусочки и разлетается. */}
+      {flying.map((shard) => (
+        <div
+          key={shard.key}
+          className="shard"
+          style={{ left: shard.left, top: shard.top, width: shard.size, height: shard.size }}
+        />
+      ))}
     </div>
   );
 }

@@ -155,6 +155,26 @@ for (const pack of PACKS) {
       if (same.length) note(level, `якорь ${same.join(', ').toUpperCase()} был и на прошлом уровне`);
     }
 
+    // Категория, вернувшаяся во второй блок уровня. Каждая стоит ровно в одном
+    // блоке, поэтому её появление в чужом — всегда повтор, даже не по соседству.
+    const where = new Map<string, number[]>();
+    lv.figures.forEach((f, i) => {
+      for (const label of f.labels) {
+        if (!where.has(label)) where.set(label, []);
+        where.get(label)!.push(i + 1);
+      }
+    });
+    for (const [label, at] of where) {
+      if (at.length < 2) continue;
+      // Соседние блоки — поломка: два блока подряд про одно и то же читаются
+      // как ошибка. Через блок — шероховатость: бывает, что короткого слова
+      // в своей категории нет вовсе и занять его больше негде.
+      const adjacent = at.some((n, i) => i > 0 && n === at[i - 1] + 1);
+      const text = `категория «${label}» стоит в блоках ${at.join(' и ')}`;
+      if (adjacent) say(level, 0, text);
+      else note(level, text);
+    }
+
     for (const [word, at] of seen) {
       if (at.length > 1 && lv.figures.some((f) => f.scoring.includes(word))) {
         say(level, 0, `${word.toUpperCase()} засчитывается в блоках ${at.map((k) => k + 1).join(' и ')}`);
@@ -165,7 +185,13 @@ for (const pack of PACKS) {
   const sorted = times.slice().sort((a, b) => a - b);
   // Сводка по запутанности: не поломки, а мера того, насколько блок трудно
   // прочитать глазом. Слова при этом остаются простыми.
-  const bands: [string, number, number][] = [['1–4', 1, 4], ['5–9', 5, 9], ['10–19', 10, 19], ['20–30', 20, 30]];
+  const bands: [string, number, number][] = [
+    ['1–2', 1, 2],
+    ['3–4', 3, 4],
+    ['5–9', 5, 9],
+    ['10–19', 10, 19],
+    ['20–30', 20, 30],
+  ];
   const rows = bands.map(([name, from, to]) => {
     let blocksHere = 0, turnsSum = 0, startsSum = 0, crossed = 0;
     for (let level = from; level <= to; level++) {
