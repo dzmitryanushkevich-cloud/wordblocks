@@ -1,6 +1,8 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { FoundEntry } from '../game/engine.js';
 import { Fullscreen } from './Fullscreen.js';
+import { useUi } from './content.js';
+import { Coin } from './Coin.js';
 
 /** Доля клетки, которую занимает буква на фигуре, — та же, что в Board. */
 const TILE_GLYPH = 0.46;
@@ -19,27 +21,41 @@ interface HudProps {
   letters: number;
   goal: number;
   found: FoundEntry[];
-  figuresLeft: number;
   flight: Flight | null;
   /** Последнее слово ещё «горит» на фигуре — в списке его пока не показываем. */
   hideLast: boolean;
+  /** Монеты игрока: они же цена подсказки, поэтому видны всегда. */
+  coins: number;
+  /** Панель отладки: живёт в шапке, чтобы не занимать место в нижней полосе. */
+  debug?: ReactNode;
   onMap: () => void;
 }
 
 /** Шапка: прогресс по буквам и найденные слова плитками, как в макете. */
-export function Hud({ letters, goal, found, figuresLeft, flight, hideLast, onMap }: HudProps) {
+export function Hud({ letters, goal, found, coins, flight, hideLast, debug, onMap }: HudProps) {
+  const ui = useUi();
   const percent = Math.min(100, Math.round((letters / goal) * 100));
+  // Кошелёк подпрыгивает на каждое изменение — иначе трату легко не заметить.
+  const [bump, setBump] = useState(false);
+  const known = useRef(coins);
+  useLayoutEffect(() => {
+    if (known.current === coins) return;
+    known.current = coins;
+    setBump(true);
+    const timer = setTimeout(() => setBump(false), 460);
+    return () => clearTimeout(timer);
+  }, [coins]);
   return (
     <div className="hud">
       <div className="top-row">
-        <button className="ghost back" onClick={onMap} title="к карте уровней">
+        <button className="ghost back" onClick={onMap} title={ui.toMapTitle}>
           ←
         </button>
+        {debug}
         <Fullscreen />
-        <div className="deck" title={`осталось фигур: ${figuresLeft}`}>
-          <i />
-          <i />
-          <b>{figuresLeft}</b>
+        <div className={bump ? 'wallet bump' : 'wallet'}>
+          <Coin size={19} />
+          {coins}
         </div>
       </div>
 

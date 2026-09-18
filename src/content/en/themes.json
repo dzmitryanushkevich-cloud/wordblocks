@@ -1,0 +1,260 @@
+{
+ "categories": {
+  "fruits": "apple apples apricot avocado banana cherry coconut date fig grape grapefruit guava kiwi lemon lime lychee mango melon nectarine olive orange papaya peach pear persimmon pineapple plum pomegranate prune quince raisin tangerine watermelon",
+  "vegetables": "artichoke asparagus bean beet broccoli cabbage carrot cauliflower celery corn cucumber dill eggplant garlic ginger leek lettuce onion parsley pea pepper potato pumpkin pumpkins radish spinach squash tomato turnip yam zucchini",
+  "berries": "berry bilberry blackberry blueberry cloudberry cranberry currant elderberry gooseberry huckleberry lingonberry mulberry raspberry strawberry",
+  "animals": "antelope badger bear beaver bison boar buffalo camel cat cheetah chimp cow deer dog dolphin donkey elephant elk ferret fox giraffe goat gopher gorilla hamster hare hedgehog hippo horse jaguar kangaroo koala lemur leopard lion llama lynx marten mole monkey moose mouse otter panda panther pig puma rabbit raccoon rat rhino seal sheep sloth squirrel tiger walrus weasel whale wolf zebra",
+  "birds": "canary chick chicken crane crow cuckoo dove duck eagle falcon finch flamingo goose hawk hen heron jay lark magpie nightingale ostrich owl parrot partridge peacock pelican penguin pheasant pigeon quail raven robin rooster seagull sparrow starling stork swallow swan swift turkey vulture woodpecker",
+  "fish": "anchovy bass carp catfish cod eel flounder goldfish grouper haddock halibut herring mackerel marlin minnow mullet perch pike piranha plaice ray salmon sardine shark snapper sturgeon swordfish trout tuna",
+  "insects": "ant bee beetle bumblebee butterfly caterpillar centipede cicada cockroach cricket dragonfly firefly flea fly gnat grasshopper hornet ladybug larva louse mantis mosquito moth scorpion snail spider termite tick wasp worm",
+  "trees": "acacia alder ash aspen baobab beech birch cedar chestnut cypress elm eucalyptus fir hazel hornbeam juniper larch linden magnolia maple oak palm pine poplar redwood rowan sequoia spruce sycamore walnut willow yew",
+  "flowers": "aster begonia bluebell buttercup cactus carnation clover crocus daffodil dahlia daisy dandelion geranium gladiolus hyacinth iris jasmine lavender lilac lily marigold narcissus orchid pansy peony petunia poppy primrose rose snowdrop sunflower tulip violet",
+  "weather": "blizzard breeze cloud cyclone dew drizzle drought flood fog frost gale hail heat humidity hurricane ice icicle lightning mist puddle rain rainbow shower sleet snow snowflake storm sunshine thaw thunder tornado typhoon wind",
+  "furniture": "armchair bed bench bookcase bunk cabinet carpet chair closet couch cradle crib cupboard curtain desk drawer dresser hammock lamp mirror ottoman rug shelf sideboard sofa stool table wardrobe",
+  "kitchen": "blender bottle bowl cauldron colander cup dish fork fridge glass grater jar jug kettle knife ladle mug napkin oven pan pitcher plate pot saucer skillet spoon strainer teapot thermos toaster tray whisk",
+  "clothes": "apron belt blouse cap cardigan coat dress glove hat jacket jeans jumper mitten overcoat pyjamas raincoat robe scarf shirt shorts skirt sock suit sweater sweatshirt tie trousers tunic uniform vest",
+  "shoes": "boot bootie clog flipper galosh heel loafer moccasin sandal shoe slipper sneaker trainer wellington",
+  "vehicles": "ambulance bicycle boat bulldozer bus canoe car cart ferry helicopter jet kayak motorcycle plane raft rocket scooter ship sled sledge submarine subway taxi tractor train tram trolley truck van wagon yacht",
+  "buildings": "airport bakery barn bridge cafe castle church cinema clinic cottage factory garage home hospital hotel house hut library lighthouse market mill mosque museum palace pharmacy restaurant school shop stadium station store temple theatre tower warehouse",
+  "jobs": "actor artist baker barber builder butcher captain carpenter cashier chef chemist cook dancer designer doctor driver electrician engineer farmer gardener jeweller journalist judge lawyer librarian mechanic miner nurse painter photographer pilot plumber poet programmer sailor scientist seller singer soldier tailor teacher waiter welder writer",
+  "sports": "archery badminton basketball boxing champion climbing cricket cycling diving fencing football goal golf gymnastics hockey jogging judo karate marathon match medal relay rowing rugby running skating skiing soccer sprint surfing swimming tennis trophy volleyball wrestling",
+  "music": "accordion ballet band banjo cello choir chord clarinet concert drum flute guitar harmonica harp keyboard march melody note opera orchestra organ piano rhythm saxophone scale song tambourine tempo trombone trumpet ukulele violin waltz",
+  "tools": "axe bolt brush chisel clamp crowbar drill file hammer hoe ladder level mallet nail nut pliers rake roller ruler sandpaper saw screw screwdriver shovel spade spanner tape toolbox vise wrench"
+ },
+ "common": {
+  "fruits": "apple apricot avocado banana cherry coconut date fig grape kiwi lemon lime mango melon orange peach pear pineapple plum watermelon",
+  "vegetables": "bean beet broccoli cabbage carrot celery corn cucumber garlic leek lettuce onion parsley pea pepper potato pumpkin radish spinach tomato",
+  "berries": "berry blackberry blueberry cranberry currant raspberry strawberry",
+  "animals": "badger bear beaver camel cat cow deer dog dolphin donkey elephant fox giraffe goat hare horse kangaroo leopard lion mole monkey moose mouse otter panda pig rabbit rat seal sheep squirrel tiger whale wolf zebra",
+  "birds": "canary chick chicken crane crow cuckoo dove duck eagle falcon flamingo goose hawk hen heron jay magpie ostrich owl parrot peacock penguin pigeon raven robin rooster seagull sparrow stork swallow swan turkey",
+  "fish": "bass carp catfish cod eel goldfish herring perch pike ray salmon sardine shark swordfish trout tuna",
+  "insects": "ant bee beetle butterfly caterpillar cockroach cricket dragonfly firefly flea fly grasshopper hornet ladybug mosquito moth scorpion snail spider tick wasp worm",
+  "trees": "ash aspen beech birch cedar chestnut cypress elm fir juniper linden maple oak palm pine poplar spruce walnut willow yew",
+  "flowers": "buttercup cactus carnation clover daffodil daisy dandelion iris jasmine lavender lilac lily marigold orchid peony poppy rose snowdrop sunflower tulip violet",
+  "weather": "blizzard breeze cloud flood fog frost hail heat hurricane ice icicle lightning mist puddle rain rainbow shower snow snowflake storm sunshine thunder tornado wind",
+  "furniture": "armchair bed bench bookcase cabinet carpet chair closet couch cupboard curtain desk drawer lamp mirror rug shelf sofa stool table wardrobe",
+  "kitchen": "blender bottle bowl cup dish fork fridge glass jar jug kettle knife mug napkin oven pan plate pot saucer spoon teapot toaster tray",
+  "clothes": "apron belt blouse cap coat dress glove hat jacket jeans mitten raincoat scarf shirt shorts skirt sock suit sweater tie trousers uniform vest",
+  "shoes": "boot clog heel sandal shoe slipper sneaker trainer",
+  "vehicles": "ambulance bicycle boat bus canoe car cart ferry helicopter jet kayak motorcycle plane rocket scooter ship sled taxi tractor train tram truck van wagon yacht",
+  "buildings": "bakery barn bridge cafe castle church cinema cottage factory garage home hospital hotel house hut library market museum palace pharmacy restaurant school shop stadium store temple theatre tower",
+  "jobs": "actor artist baker barber builder captain carpenter cashier chef cook dancer doctor driver engineer farmer gardener judge lawyer mechanic nurse painter pilot plumber poet sailor scientist singer soldier tailor teacher waiter writer",
+  "sports": "basketball boxing champion climbing cycling diving football goal golf hockey judo karate marathon match medal running skating skiing soccer sprint surfing swimming tennis trophy volleyball wrestling",
+  "music": "ballet band banjo cello choir chord clarinet concert drum flute guitar harp keyboard march melody note opera orchestra organ piano rhythm saxophone song trombone trumpet violin",
+  "tools": "axe bolt brush chisel drill hammer hoe ladder nail nut pliers rake roller ruler saw screw screwdriver shovel spade tape toolbox wrench"
+ },
+ "families": {
+  "Garden": [
+   "fruits",
+   "vegetables",
+   "berries"
+  ],
+  "Wildlife": [
+   "animals",
+   "birds",
+   "fish",
+   "insects"
+  ],
+  "Home": [
+   "furniture",
+   "kitchen",
+   "clothes",
+   "shoes"
+  ],
+  "Nature": [
+   "trees",
+   "flowers",
+   "weather"
+  ],
+  "Town": [
+   "vehicles",
+   "buildings"
+  ],
+  "People and work": [
+   "jobs",
+   "sports",
+   "music",
+   "tools"
+  ]
+ },
+ "plan": [
+  {
+   "categories": [
+    "fish"
+   ]
+  },
+  {
+   "categories": [
+    "clothes"
+   ]
+  },
+  {
+   "categories": [
+    "furniture",
+    "kitchen"
+   ]
+  },
+  {
+   "categories": [
+    "fruits",
+    "vegetables"
+   ]
+  },
+  {
+   "categories": [
+    "buildings",
+    "music"
+   ]
+  },
+  {
+   "categories": [
+    "insects",
+    "flowers"
+   ]
+  },
+  {
+   "categories": [
+    "trees",
+    "jobs"
+   ]
+  },
+  {
+   "categories": [
+    "berries",
+    "animals"
+   ]
+  },
+  {
+   "categories": [
+    "birds",
+    "shoes"
+   ]
+  },
+  {
+   "categories": [
+    "vehicles",
+    "tools"
+   ]
+  },
+  {
+   "categories": [
+    "weather",
+    "sports"
+   ]
+  },
+  {
+   "categories": [
+    "flowers",
+    "shoes"
+   ]
+  },
+  {
+   "categories": [
+    "berries",
+    "tools"
+   ]
+  },
+  {
+   "categories": [
+    "birds",
+    "jobs"
+   ]
+  },
+  {
+   "categories": [
+    "kitchen",
+    "sports"
+   ]
+  },
+  {
+   "categories": [
+    "trees",
+    "vehicles"
+   ]
+  },
+  {
+   "categories": [
+    "insects",
+    "buildings"
+   ]
+  },
+  {
+   "categories": [
+    "furniture",
+    "music"
+   ]
+  },
+  {
+   "categories": [
+    "weather",
+    "clothes"
+   ]
+  },
+  {
+   "categories": [
+    "fruits",
+    "animals"
+   ]
+  },
+  {
+   "categories": [
+    "vegetables",
+    "fish"
+   ]
+  },
+  {
+   "categories": [
+    "berries",
+    "music"
+   ]
+  },
+  {
+   "categories": [
+    "shoes",
+    "sports"
+   ]
+  },
+  {
+   "categories": [
+    "insects",
+    "trees"
+   ]
+  },
+  {
+   "categories": [
+    "fruits",
+    "weather"
+   ]
+  },
+  {
+   "categories": [
+    "flowers",
+    "buildings"
+   ]
+  },
+  {
+   "categories": [
+    "vegetables",
+    "vehicles"
+   ]
+  },
+  {
+   "categories": [
+    "birds",
+    "jobs"
+   ]
+  },
+  {
+   "categories": [
+    "fruits",
+    "sports"
+   ]
+  },
+  {
+   "categories": [
+    "buildings",
+    "music"
+   ]
+  }
+ ]
+}

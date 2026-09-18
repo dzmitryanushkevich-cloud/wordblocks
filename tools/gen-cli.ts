@@ -6,12 +6,19 @@
  *   npm run gen               — уровни 1, 5 и 10 подробно
  *   npm run gen -- 3          — подробно уровень 3
  *   npm run gen -- stats 40   — статистика по 40 уровням без печати фигур
+ *   npm run gen -- themes 12  — какие якоря попали в тему уровня
  */
-import { getDictionary } from '../src/core/loadDictionary.js';
+import { createContent } from '../src/core/content.js';
+import { packById, DEFAULT_PACK } from '../src/content/index.js';
 import { generateLevel } from '../src/core/generator.js';
 import type { Figure, Level } from '../src/core/types.js';
+import { levelTheme, themeWords } from '../src/core/themes.js';
 
-const dictionary = getDictionary();
+// Первым аргументом можно указать язык: npm run gen -- en stats 40
+const argv = process.argv.slice(2);
+const pack = packById(argv[0]) ?? DEFAULT_PACK;
+if (packById(argv[0])) argv.shift();
+const content = createContent(pack);
 
 function drawFigure(figure: Figure): string {
   const grid: string[][] = Array.from({ length: figure.height }, () =>
@@ -22,11 +29,14 @@ function drawFigure(figure: Figure): string {
 }
 
 function printLevel(level: Level): void {
-  console.log(`\n=== Уровень ${level.index} (сид ${level.seed}) ===`);
+  console.log(`\n=== Уровень ${level.index} (сид ${level.seed}) — ${level.theme.title} ===`);
   console.log(`цель ${level.goalLetters} из ${level.maxLetters} букв\n`);
   level.figures.forEach((figure, i) => {
     const words = figure.words.map((w) => w.word.toUpperCase()).join(', ');
-    console.log(`Фигура ${i + 1}: ${figure.cells.length} клеток, якорь ${figure.anchor.toUpperCase()}`);
+    const labels = figure.labels.length ? ` [${figure.labels.join(' · ')}]` : ' [без подписи]';
+    console.log(
+      `Фигура ${i + 1}: ${figure.cells.length} клеток, якорь ${figure.anchor.toUpperCase()}${labels}`,
+    );
     console.log(drawFigure(figure));
     console.log(`   слова (${figure.words.length}): ${words}`);
     console.log(`   попыток генерации: ${figure.attempts}\n`);
@@ -45,7 +55,7 @@ function printStats(levels: number): void {
   const wordCounts = new Map<number, number>();
 
   for (let i = 1; i <= levels; i++) {
-    const level = generateLevel(dictionary, i);
+    const level = generateLevel(content, i);
     goal += level.goalLetters;
     max += level.maxLetters;
     for (const figure of level.figures) {
@@ -90,7 +100,7 @@ function turns(figure: Figure): number {
 function printBalance(levels: number): void {
   console.log('\nур  якоря          клеток        слов  поворотов  цель/макс  запас  худший');
   for (let index = 1; index <= levels; index++) {
-    const level = generateLevel(dictionary, index);
+    const level = generateLevel(content, index);
     const anchors = level.figures.map((f) => f.anchor.length);
     const sizes = level.figures.map((f) => f.cells.length);
     const words = level.figures.map((f) => f.words.length);
@@ -109,13 +119,36 @@ function printBalance(levels: number): void {
   }
 }
 
-const args = process.argv.slice(2);
+/**
+ * Покрытие тем: якорь в скобках — тот, которому в теме не нашлось места по длине
+ * или по форме, и генератор молча взял обычное слово.
+ */
+function printThemes(levels: number): void {
+  let themed = 0;
+  let total = 0;
+  console.log('\nур  тема                      якоря');
+  for (let index = 1; index <= levels; index++) {
+    const pool = new Set(themeWords(pack.themes, levelTheme(pack.themes, index)));
+    const level = generateLevel(content, index);
+    total += level.figures.length;
+    themed += level.figures.filter((f) => pool.has(f.anchor)).length;
+    const marks = level.figures.map((f) => (pool.has(f.anchor) ? f.anchor : `(${f.anchor})`));
+    console.log(
+      `${String(index).padStart(2)}  ${level.theme.title.padEnd(24)}  ${marks.join(' ')}`,
+    );
+  }
+  console.log(`\nв тему попало ${themed} якорей из ${total}`);
+}
+
+const args = argv;
 if (args[0] === 'balance') {
   printBalance(Number(args[1] ?? 10));
+} else if (args[0] === 'themes') {
+  printThemes(Number(args[1] ?? 12));
 } else if (args[0] === 'stats') {
   printStats(Number(args[1] ?? 20));
 } else if (args.length > 0) {
-  printLevel(generateLevel(dictionary, Number(args[0])));
+  printLevel(generateLevel(content, Number(args[0])));
 } else {
-  for (const index of [1, 5, 10]) printLevel(generateLevel(dictionary, index));
+  for (const index of [1, 5, 10]) printLevel(generateLevel(content, index));
 }

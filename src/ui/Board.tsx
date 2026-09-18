@@ -3,9 +3,19 @@ import type { Figure } from '../core/types.js';
 import { outlinePath } from './outline.js';
 
 const GAP = 6;
-/** Ширина боковых колонок под очередь блоков — совпадает с --rail в стилях. */
-const RAIL = 52;
-const MIN_CELL = 40;
+/**
+ * Подложка блока обведена наружу (stroke у .plate), поэтому видимая деталь шире
+ * решётки плиток. Этот запас входит в расчёт ширины — иначе деталь наползает
+ * на миниатюры очереди, хотя по клеткам всё «помещается».
+ */
+const BLEED = 10;
+/** Воздух по бокам блока: деталь не должна упираться в край экрана. */
+const CLEAR = 10;
+/** Запас под блоком сверх отступа сцены: тень подложки не должна лезть в полосу. */
+const BOTTOM_AIR = 6;
+/* Нижняя граница клетки: ниже пальцу уже неудобно, но обрезать фигуру хуже,
+   поэтому на маленьком экране высокий блок всё же ужимается. */
+const MIN_CELL = 26;
 const MAX_CELL = 82;
 
 /** Псевдослучайное, но стабильное число из индекса: одна и та же фигура рассыпается одинаково. */
@@ -143,7 +153,7 @@ function shards(figure: Figure, cell: number, pitch: number, taken: number[]) {
 interface BoardProps {
   figure: Figure;
   selection: number[];
-  hintCell: number | null;
+  hintCells: number[];
   crumbling: boolean;
   /** Клетки найденного слова: они не рассыпаются, их буквы улетают в список. */
   taken: number[];
@@ -159,7 +169,7 @@ interface BoardProps {
  * поверх рисуется линия выделения. Ввод — pointer events, поэтому мышь
  * и палец работают одним и тем же кодом.
  */
-export function Board({ figure, selection, hintCell, crumbling, taken, departed, onPick, onRelease }: BoardProps) {
+export function Board({ figure, selection, hintCells, crumbling, taken, departed, onPick, onRelease }: BoardProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ width: 0, height: 0, cell: 0, gap: GAP });
 
@@ -180,10 +190,24 @@ export function Board({ figure, selection, hintCell, crumbling, taken, departed,
       const padY = padding
         ? parseFloat(padding.paddingTop) + parseFloat(padding.paddingBottom)
         : 0;
-      const availableWidth = (stage?.clientWidth ?? window.innerWidth) - 16 - RAIL * 2;
-      // Сверху над фигурой ещё живут собираемое слово и счётчик фигур —
-      // их высоту тоже вычитаем, иначе на низких экранах фигура лезет в подвал.
-      const availableHeight = (stage?.clientHeight ?? 420) - padY - 136;
+      const padX = padding
+        ? parseFloat(padding.paddingLeft) + parseFloat(padding.paddingRight)
+        : 0;
+      const slot = node.closest('.board-slot') as HTMLElement | null;
+      const availableWidth =
+        (stage?.clientWidth ?? window.innerWidth) - padX - (BLEED + CLEAR) * 2;
+      // Сверху над блоком живут собираемое слово и подпись категорий. Их высоту
+      // меряем по факту: подпись из двух категорий на узком экране занимает две
+      // строки, и на глазок заложенный запас в этом случае съедает низ фигуры.
+      const draft = stage?.querySelector('.draft');
+      const labels = slot?.querySelector('.block-labels');
+      const rowGap = slot ? parseFloat(getComputedStyle(slot).rowGap) || 0 : 0;
+      const reserve =
+        (draft?.getBoundingClientRect().height ?? 0) +
+        (labels?.getBoundingClientRect().height ?? 0) +
+        rowGap +
+        BOTTOM_AIR;
+      const availableHeight = (stage?.clientHeight ?? 420) - padY - reserve;
       const cell = Math.max(
         MIN_CELL,
         Math.min(
@@ -284,7 +308,10 @@ export function Board({ figure, selection, hintCell, crumbling, taken, departed,
       {/* Общая подложка под всеми плитками — фигура читается как одна деталь. */}
       {plate && (
         <svg className="plate" width={box.width} height={box.height}>
-          <path d={plate} />
+          {/* Светлая обводка идёт отдельным путём под деталью: на пёстром пейзаже
+              кремовая плита без неё сливается то с небом, то с песком. */}
+          <path className="rim" d={plate} />
+          <path className="body" d={plate} />
         </svg>
       )}
 
@@ -316,7 +343,7 @@ export function Board({ figure, selection, hintCell, crumbling, taken, departed,
             className={[
               'tile',
               selection.includes(i) ? 'picked' : '',
-              hintCell === i ? 'hinted' : '',
+              hintCells.includes(i) ? 'hinted' : '',
             ]
               .filter(Boolean)
               .join(' ')}

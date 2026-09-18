@@ -12,7 +12,7 @@
   - только буквы а-я, длина 3..9, Ё приводится к Е, не начинается на ь/ъ/ы
   - вручную вырезан список вульгарного, медицинского и оскорбительного
 
-Результат: src/data/dictionary.json  { coreCount, words }
+Результат: src/content/ru/dictionary.json  { coreCount, words }
 words отсортированы по убыванию частоты. Первые coreCount слов считаются узнаваемыми
 и только они используются как якорные (целевые) слова фигур; остальные принимаются как ответ.
 
@@ -24,7 +24,7 @@ import json, os, re, sys, urllib.request
 NOUNS_URL = "https://raw.githubusercontent.com/Harrix/Russian-Nouns/main/dist/russian_nouns.txt"
 FREQ_URL = "https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/ru/ru_full.txt"
 CACHE = os.path.join(os.path.dirname(__file__), ".cache")
-OUT = os.path.join(os.path.dirname(__file__), "..", "src", "data", "dictionary.json")
+OUT = os.path.join(os.path.dirname(__file__), "..", "src", "content", "ru", "dictionary.json")
 
 MIN_FREQ = 20
 MIN_LEN, MAX_LEN = 3, 9

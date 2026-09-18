@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { getDictionary } from '../src/core/loadDictionary.js';
+import { createContent } from '../src/core/content.js';
+import { russian } from '../src/content/ru/index.js';
 import { Rng, levelSeed } from '../src/core/rng.js';
 import {
   buildAdjacency,
@@ -14,7 +15,8 @@ import { generateLevel } from '../src/core/generator.js';
 import { levelParams } from '../src/core/difficulty.js';
 import type { Cell } from '../src/core/types.js';
 
-const dictionary = getDictionary();
+const content = createContent(russian);
+const dictionary = content.dictionary;
 
 describe('словарь', () => {
   it('содержит существительные и не содержит служебных слов', () => {
@@ -146,8 +148,8 @@ describe('генератор уровней', () => {
 
   it('каждая фигура держит свои инварианты', () => {
     for (const index of levels) {
-      const level = generateLevel(dictionary, index);
-      const params = levelParams(index);
+      const level = generateLevel(content, index);
+      const params = levelParams(russian.curve, index);
       expect(level.figures).toHaveLength(5);
 
       level.figures.forEach((figure, i) => {
@@ -158,9 +160,11 @@ describe('генератор уровней', () => {
         expect(readWord(figure.cells, anchorHit!.path)).toBe(figure.anchor);
         expect(isValidPath(adjacency, anchorHit!.path)).toBe(true);
 
-        // длиннее якоря слов быть не должно, короче — обязано быть хотя бы одно
-        expect(figure.words[0].word.length).toBe(figure.anchor.length);
-        expect(figure.words.some((w) => w.word.length < figure.anchor.length)).toBe(true);
+        // Засчитываются только слова темы: якорь среди них самый длинный,
+        // и рядом обязано быть хотя бы одно покороче — иначе выбирать не из чего.
+        expect(figure.scoring).toContain(figure.anchor);
+        expect(Math.max(...figure.scoring.map((w) => w.length))).toBe(figure.anchor.length);
+        expect(figure.scoring.some((w) => w.length < figure.anchor.length)).toBe(true);
 
         // лёгких трёхбуквенных выходов не больше, чем позволяет умная добивка
         const short = figure.words.filter((w) => w.word.length === 3).length;
@@ -178,7 +182,7 @@ describe('генератор уровней', () => {
 
   it('цель уровня достижима и не берётся одними короткими словами', () => {
     for (const index of levels) {
-      const level = generateLevel(dictionary, index);
+      const level = generateLevel(content, index);
       expect(level.maxLetters).toBe(
         level.figures.reduce((sum, f) => sum + f.anchor.length, 0),
       );
@@ -188,9 +192,9 @@ describe('генератор уровней', () => {
   });
 
   it('один сид даёт один и тот же уровень', () => {
-    const a = generateLevel(dictionary, 7, { gameSeed: 123 });
-    const b = generateLevel(dictionary, 7, { gameSeed: 123 });
-    const c = generateLevel(dictionary, 7, { gameSeed: 124 });
+    const a = generateLevel(content, 7, { gameSeed: 123 });
+    const b = generateLevel(content, 7, { gameSeed: 123 });
+    const c = generateLevel(content, 7, { gameSeed: 124 });
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
     expect(JSON.stringify(c)).not.toBe(JSON.stringify(a));
     expect(levelSeed(123, 7)).toBe(levelSeed(123, 7));

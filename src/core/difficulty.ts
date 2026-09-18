@@ -1,3 +1,5 @@
+import type { CurveContent, CurveRow } from '../content/types.js';
+
 export interface FigureParams {
   size: number;
   anchorLength: number;
@@ -7,6 +9,14 @@ export interface FigureParams {
   maxShortWords: number;
   /** Верхняя граница на общее число спрятанных слов. */
   maxWords: number;
+  /** Ступень формы: 0 — простые силуэты, 1 — вытянутые, 2 — скелеты и дырки. */
+  shapeStage: number;
+  /**
+   * Сколько слов генератор кладёт из темы уровня: два — якорь и соблазн,
+   * три — плюс слово средней длины. Подпись над блоком называет их категории,
+   * поэтому лишнее тематическое слово делает блок гуще, а не несправедливее.
+   */
+  themedWords: number;
   /**
    * Длина «слова-соблазна» — короткого слова, которое генератор специально
    * подкладывает рядом с якорем. Без него в блоке не из чего выбирать
@@ -30,76 +40,75 @@ export interface LevelParams {
   figures: FigureParams[];
   /** Доля от максимума (суммы якорных слов), которую нужно набрать для победы. */
   goalRatio: number;
+  /** Прятать только ходовые слова категорий: первые уровни знакомят с игрой. */
+  commonOnly: boolean;
 }
 
 const clamp = (value: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, value));
 
 /**
- * Первые десять уровней расписаны вручную: это обучение, и каждый шаг должен
- * добавлять ровно одну новую трудность. Сначала растёт длина слова, потом
- * размер блока, потом извилистость пути, и только затем ужимается запас по цели.
- *
- * anchors — длина якоря в каждом из пяти блоков, size — клеток в блоке,
- * turns — предел поворотов пути, goal — какую долю максимума нужно набрать.
+ * Дальше расписанных вручную уровней кривая продолжается формулой.
+ * Числа — из пакета языка: слова разных языков разной длины.
  */
-const OPENING: {
-  anchors: number[];
-  size: number;
-  turns: number;
-  goal: number;
-  words: number;
-  pool: number;
-}[] = [
-  { anchors: [4, 4, 4, 4, 4], size: 7, turns: 1, goal: 0.6, words: 3, pool: 700 },
-  { anchors: [4, 4, 5, 4, 4], size: 8, turns: 1, goal: 0.65, words: 3, pool: 900 },
-  { anchors: [4, 5, 4, 5, 5], size: 8, turns: 2, goal: 0.69, words: 4, pool: 1100 },
-  { anchors: [5, 5, 4, 5, 5], size: 9, turns: 2, goal: 0.72, words: 4, pool: 1400 },
-  { anchors: [5, 5, 6, 5, 5], size: 10, turns: 2, goal: 0.74, words: 4, pool: 1700 },
-  { anchors: [5, 6, 5, 6, 6], size: 10, turns: 3, goal: 0.75, words: 5, pool: 2000 },
-  { anchors: [6, 6, 5, 6, 6], size: 11, turns: 3, goal: 0.76, words: 5, pool: 2400 },
-  { anchors: [6, 6, 7, 6, 6], size: 12, turns: 3, goal: 0.77, words: 5, pool: 2800 },
-  { anchors: [6, 7, 6, 7, 7], size: 12, turns: 4, goal: 0.78, words: 5, pool: 3200 },
-  { anchors: [7, 7, 6, 7, 7], size: 13, turns: 4, goal: 0.78, words: 5, pool: 3600 },
-];
-
-/** Дальше десятого уровня кривая продолжается формулой. */
-function laterLevel(levelIndex: number, figureCount: number) {
+function laterLevel(curve: CurveContent, levelIndex: number, figureCount: number): CurveRow {
+  const { later, opening } = curve;
+  const step = Math.floor((levelIndex - opening.length) / later.anchorPerLevels);
   const anchors = Array.from({ length: figureCount }, (_, i) =>
-    clamp(7 + Math.floor((levelIndex - 10) / 4) + (i % 3 === 2 ? 1 : 0), 6, 9),
+    clamp(later.anchorBase + step + (i % 3 === 2 ? 1 : 0), 6, later.anchorCap),
   );
   return {
     anchors,
-    size: clamp(13 + Math.floor((levelIndex - 10) / 3), 13, 15),
-    turns: 5,
-    goal: 0.78,
-    words: 5,
+    size: clamp(
+      later.sizeBase + Math.floor((levelIndex - opening.length) / later.sizePerLevels),
+      later.sizeBase,
+      later.sizeCap,
+    ),
+    turns: later.turns,
+    goal: later.goal,
+    words: later.words,
+    themed: later.themed,
+    short: later.short,
     pool: Infinity,
   };
 }
 
-export function levelParams(levelIndex: number, figureCount = 5): LevelParams {
+/**
+ * Параметры уровня по кривой из пакета языка. Первые уровни расписаны в пакете
+ * вручную — это обучение, и каждый шаг добавляет ровно одну новую трудность;
+ * дальше кривая продолжается формулой от номера уровня.
+ */
+export function levelParams(curve: CurveContent, levelIndex: number, figureCount = 5): LevelParams {
   const plan =
-    levelIndex <= OPENING.length
-      ? OPENING[levelIndex - 1]
-      : laterLevel(levelIndex, figureCount);
+    levelIndex <= curve.opening.length
+      ? curve.opening[levelIndex - 1]
+      : laterLevel(curve, levelIndex, figureCount);
 
   const figures: FigureParams[] = [];
   for (let i = 0; i < figureCount; i++) {
     const anchorLength = plan.anchors[i % plan.anchors.length];
     // Блок должен вмещать слово с запасом на отвлекающие буквы.
-    const size = Math.max(plan.size, anchorLength + 3);
-    const box = size <= 9 ? 4 : 5;
+    // Длинному слову нужен запас клеток, иначе блок превращается в одну змейку.
+    const size = Math.max(plan.size, anchorLength + (anchorLength >= 10 ? 5 : 3));
+    // Габарит растёт с размером блока, но по ширине охотнее, чем по высоте:
+    // на телефоне под блок отведено больше ширины, чем высоты.
+    const box = size <= 9 ? [4, 4] : size <= 12 ? [5, 5] : size <= 15 ? [6, 5] : [7, 6];
     figures.push({
       size,
       anchorLength,
-      boxW: box,
-      boxH: box,
-      maxShortWords: levelIndex <= 3 ? 2 : 1,
+      boxW: box[0],
+      boxH: box[1],
+      maxShortWords: plan.short,
       maxWords: plan.words,
+      themedWords: plan.themed,
+      // Форма усложняется отдельно от размера: сначала блок должен читаться.
+      shapeStage:
+        levelIndex <= curve.shapeStages[0] ? 0 : levelIndex <= curve.shapeStages[1] ? 1 : 2,
       temptationLength: clamp(anchorLength - 3, 3, 4),
       maxTurns: plan.turns,
       anchorPool: plan.pool,
     });
   }
-  return { figures, goalRatio: plan.goal };
+  // До тринадцатого уровня прячем только то, что знают все: редкое слово
+  // на старте читается как ошибка игры, а не как задача.
+  return { figures, goalRatio: plan.goal, commonOnly: levelIndex <= curve.commonUntil };
 }

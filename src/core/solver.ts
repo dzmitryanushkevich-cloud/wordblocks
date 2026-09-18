@@ -21,7 +21,7 @@ export function solve(
   options: SolveOptions = {},
 ): WordHit[] {
   const minLength = options.minLength ?? 3;
-  const maxLength = options.maxLength ?? 9;
+  const maxLength = options.maxLength ?? 12;
   const found = new Map<string, number[]>();
   const path: number[] = [];
   const used = new Array<boolean>(cells.length).fill(false);

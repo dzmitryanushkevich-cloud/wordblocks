@@ -26,7 +26,8 @@ export interface GameState {
   found: FoundEntry[];
   letters: number;
   outcomes: FigureOutcome[];
-  hintCell: number | null;
+  /** Открытые подсказкой клетки — начало загаданного слова, по одной за нажатие. */
+  hintCells: number[];
   hintsUsed: number;
   phase: Phase;
   /** Последнее засчитанное слово — для анимации рассыпания. */
@@ -48,7 +49,7 @@ export function startLevel(level: Level): GameState {
     found: [],
     letters: 0,
     outcomes: [],
-    hintCell: null,
+    hintCells: [],
     hintsUsed: 0,
     phase: 'playing',
     lastWord: null,
@@ -78,10 +79,17 @@ export function extendSelection(state: GameState, cell: number): GameState {
   return { ...state, selection: [...selection, cell] };
 }
 
+/**
+ * Чем кончился свайп: слово засчитано, слово есть в языке, но не из темы уровня,
+ * или такого слова нет вовсе. Интерфейс показывает три разных ответа.
+ */
+export type ReleaseStatus = 'accepted' | 'off-theme' | 'unknown';
+
 export interface ReleaseResult {
   state: GameState;
   /** Засчитано ли слово: интерфейс по этому решает, играть ли анимацию. */
   accepted: boolean;
+  status: ReleaseStatus;
   word: string;
 }
 
@@ -90,20 +98,22 @@ export interface ReleaseResult {
  * и в нём не меньше трёх букв. Никаких подтверждений: отпустил — фигура рассыпалась.
  */
 export function releaseSelection(state: GameState, dictionary: Dictionary): ReleaseResult {
-  if (state.phase !== 'playing') return { state, accepted: false, word: '' };
+  if (state.phase !== 'playing') return { state, accepted: false, status: 'unknown', word: '' };
   const word = selectionWord(state);
   const figure = currentFigure(state);
 
-  const valid =
-    word.length >= 3 &&
-    isValidPath(state.adjacency, state.selection) &&
-    dictionary.has(word);
+  const drawn = word.length >= 3 && isValidPath(state.adjacency, state.selection);
+  // Считаются только слова темы уровня — она написана над блоком. Остальные
+  // слова языка в блоке неизбежны (ЛАЙ внутри ЛАЙМА), и рассыпать блок
+  // случайной ИВОЙ на фруктовом уровне было бы нечестно.
+  const scores = drawn && figure.scoring.includes(word);
 
-  if (!valid) {
-    return { state: { ...state, selection: [] }, accepted: false, word };
+  if (!scores) {
+    const status: ReleaseStatus = drawn && dictionary.has(word) ? 'off-theme' : 'unknown';
+    return { state: { ...state, selection: [] }, accepted: false, status, word };
   }
 
-  const missed = figure.words.map((w) => w.word).filter((w) => w !== word);
+  const missed = figure.scoring.filter((w) => w !== word);
   return {
     state: {
       ...state,
@@ -111,12 +121,13 @@ export function releaseSelection(state: GameState, dictionary: Dictionary): Rele
       found: [...state.found, { word, figureIndex: state.figureIndex }],
       letters: state.letters + word.length,
       outcomes: [...state.outcomes, { taken: word, missed }],
-      hintCell: null,
+      hintCells: [],
       phase: 'crumbling',
       lastWord: word,
       lastPath: state.selection,
     },
     accepted: true,
+    status: 'accepted',
     word,
   };
 }
@@ -144,7 +155,7 @@ export function finishCrumble(state: GameState): GameState {
     figureIndex: next,
     adjacency: buildAdjacency(state.level.figures[next].cells),
     selection: [],
-    hintCell: null,
+    hintCells: [],
     phase: 'playing',
     lastWord: null,
     lastPath: [],
@@ -155,12 +166,19 @@ export function finishCrumble(state: GameState): GameState {
 export function useHint(state: GameState): GameState {
   if (state.phase !== 'playing') return state;
   const figure = currentFigure(state);
-  const best = figure.words[0];
+  // Подсказка светит на длинное слово темы: только оно и имеет смысл.
+  const target = figure.scoring[0] ?? figure.anchor;
+  const best = figure.words.find((w) => w.word === target) ?? figure.words[0];
   if (!best) return state;
+  // Каждое нажатие открывает следующую клетку слова: одна клетка показывает,
+  // где слово начинается, две — ещё и куда оно идёт. Иначе вторая подсказка
+  // ничего не добавляла и выглядела сломанной.
+  const shown = Math.min(state.hintCells.length + 1, best.path.length);
+  if (shown === state.hintCells.length) return state;
   return {
     ...state,
-    hintCell: best.path[0],
-    hintsUsed: state.hintCell === best.path[0] ? state.hintsUsed : state.hintsUsed + 1,
+    hintCells: best.path.slice(0, shown),
+    hintsUsed: state.hintsUsed + 1,
   };
 }
 

@@ -26,7 +26,9 @@ const settleBoard = () =>
 
 const shot = (name) => page.screenshot({ path: new URL(`../.shots/${name}.png`, import.meta.url).pathname });
 
-await page.goto(new URL('../wordblocks.html', import.meta.url).href);
+// Язык закрепляем явно: тест читает русские подписи, а по умолчанию игра
+// смотрит на язык браузера.
+await page.goto(`${new URL('../wordblocks.html', import.meta.url).href}?lang=ru`);
 await page.waitForSelector('.levels');
 await shot('01-map');
 
@@ -117,9 +119,12 @@ assert.equal(await progress(), `${word.length} / 16`);
 assert.deepEqual(await foundWords(), [word.toUpperCase()]);
 await shot('04-next-figure');
 
-// 3. Подсказка подсвечивает клетку.
-await page.click('.footer button:not(.ghost):not(.debug-toggle)');
+// 3. Подсказка подсвечивает клетку и стоит монет.
+const walletBefore = Number((await page.textContent('.wallet')).replace(/\D/g, ''));
+await page.click('.hint');
 assert.equal(await page.locator('.tile.hinted').count(), 1, 'подсказка должна подсветить одну плитку');
+const walletAfter = Number((await page.textContent('.wallet')).replace(/\D/g, ''));
+assert.ok(walletAfter < walletBefore, 'подсказка должна списать монеты');
 await shot('05-hint');
 
 // 4. Проходим уровень через отладку. Уровень закрывается сразу, как только исход
@@ -138,16 +143,18 @@ for (let i = 0; i < 5; i++) {
 }
 await page.waitForSelector('.overlay');
 const title = await page.textContent('.card h2');
-const recap = await page.locator('.recap div').count();
+const stars = await page.locator('.stars .star').count();
+const prize = await page.textContent('.prize');
 await shot('06-result');
-assert.ok(recap >= 1 && recap <= 5, 'в итогах должна быть строка на каждый сыгранный блок');
-assert.equal(title, 'Уровень пройден', 'взяв все якоря, уровень должен быть пройден');
+assert.equal(stars, 3, 'на победе должно быть три звезды');
+assert.match(prize, /\+\d+/, 'на победе должна быть награда монетами');
+assert.equal(title, 'Браво!', 'взяв все якоря, уровень должен быть пройден');
 
 // 5. Прогресс уровня сохраняется и уровень 2 открывается.
 await page.click('.card .ghost');
 await page.waitForSelector('.levels');
 await shot('07-map-after');
-const unlocked = await page.evaluate(() => JSON.parse(localStorage.getItem('wordblocks.save.v1') ?? '{}'));
+const unlocked = await page.evaluate(() => JSON.parse(localStorage.getItem('wordblocks.save.ru.v1') ?? '{}'));
 
 console.log('итог уровня:', title);
 console.log('сохранение:', JSON.stringify(unlocked));

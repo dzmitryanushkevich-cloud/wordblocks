@@ -1,3 +1,4 @@
+import type { DictionaryContent } from '../content/types.js';
 import type { Rng } from './rng.js';
 
 interface TrieNode {
@@ -7,13 +8,6 @@ interface TrieNode {
 
 function createNode(): TrieNode {
   return { children: new Map(), terminal: false };
-}
-
-export interface DictionaryData {
-  /** Сколько первых слов считаются узнаваемыми (только они идут в якоря). */
-  coreCount: number;
-  /** Слова по убыванию частоты. */
-  words: string[];
 }
 
 /**
@@ -31,11 +25,29 @@ export class Dictionary {
   private readonly coreByLength = new Map<number, string[]>();
   /** Частотность букв, посчитанная по самому словарю: основа «естественной» добивки. */
   private readonly rank = new Map<string, number>();
+  private readonly themed = new Set<string>();
   readonly letters: string[] = [];
   readonly letterWeights: number[] = [];
 
-  constructor(data: DictionaryData) {
+  /**
+   * @param data слова языка по убыванию частоты
+   * @param themeWords слова категорий: собственный белый список языка
+   */
+  constructor(data: DictionaryContent, themeWords: readonly string[] = []) {
     const counts = new Map<string, number>();
+    const skip = new Set(data.fillerExclude ?? []);
+
+    // Слова тем — собственный белый список: они узнаваемы по построению,
+    // и проверять их частотность в киносубтитрах бессмысленно (крыжовник,
+    // стамеска и кабачок там почти не встречаются, а знают их все).
+    for (const word of themeWords) {
+      if (!this.valid.has(word)) {
+        this.valid.add(word);
+        this.insert(word);
+      }
+      this.themed.add(word);
+    }
+
     data.words.forEach((word, index) => {
       this.valid.add(word);
       this.insert(word);
@@ -45,10 +57,10 @@ export class Dictionary {
         else this.coreByLength.set(word.length, [word]);
         this.rank.set(word, index);
       }
-      // Ъ в добивку не берём: слово с ним начаться не может, а в середине он
-      // встречается только в считаных словах — в блоке это мёртвая клетка.
+      // Буквы вроде русского «ъ» в добивку не берём: слово с них не начинается,
+      // а в случайной клетке они читаются как опечатка. Список — в пакете языка.
       for (const ch of word) {
-        if (ch !== 'ъ') counts.set(ch, (counts.get(ch) ?? 0) + 1);
+        if (!skip.has(ch)) counts.set(ch, (counts.get(ch) ?? 0) + 1);
       }
     });
     for (const [letter, count] of [...counts].sort((a, b) => b[1] - a[1])) {
@@ -102,9 +114,12 @@ export class Dictionary {
     return narrowed.length > 0 ? narrowed : bucket;
   }
 
-  /** Узнаваемо ли слово: входит ли оно в самые частотные `maxRank` слов. */
+  /**
+   * Узнаваемо ли слово: входит ли оно в самые частотные `maxRank` слов
+   * или в тематические списки, которые собраны вручную и узнаваемы всегда.
+   */
   isCommon(word: string, maxRank: number): boolean {
-    return (this.rank.get(word) ?? Infinity) <= maxRank;
+    return this.themed.has(word) || (this.rank.get(word) ?? Infinity) <= maxRank;
   }
 
   /** Случайная буква с учётом частотности словаря. */

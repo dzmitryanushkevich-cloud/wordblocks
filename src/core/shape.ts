@@ -16,22 +16,45 @@ export interface ShapeParams {
   /** Ограничение габарита: фигура должна поместиться в boxW x boxH. */
   boxW: number;
   boxH: number;
+  /** Ступень формы: 0 — только простые силуэты, 2 — вся выдумка целиком. */
+  shapeStage?: number;
 }
 
 /**
  * Характер формы. Случайный рост всегда даёт округлую кляксу, поэтому
  * разнообразие приходится задавать намеренно: вытянутые, симметричные,
- * выращенные из готового силуэта. Вертикальные формы в приоритете —
- * широкий блок на телефоне приходится ужимать, высокий нет.
+ * выращенные из готового силуэта.
  */
 export type ShapeStyle = 'blob' | 'tall' | 'wide' | 'symmetric' | 'template';
 
-const STYLE_WEIGHTS: [ShapeStyle, number][] = [
-  ['blob', 34],
-  ['tall', 26],
-  ['symmetric', 20],
-  ['template', 15],
-  ['wide', 5],
+/*
+ * Форма тоже идёт по кривой сложности. На первых уровнях блок должен читаться
+ * с одного взгляда: плотное пятно или симметричная деталь. Дальше добавляются
+ * вытянутые, и только к десятому уровню — скелеты с дырками и коридорами
+ * в одну клетку, где путь слова приходится выискивать.
+ *
+ * Внутри каждой ступени веса перекошены в сторону широких форм: поля под блоком
+ * больше в ширину, чем в высоту, поэтому вытянутая вбок фигура выходит крупнее
+ * такой же вытянутой вверх.
+ */
+const STAGE_WEIGHTS: [ShapeStyle, number][][] = [
+  [
+    ['blob', 72],
+    ['symmetric', 28],
+  ],
+  [
+    ['blob', 40],
+    ['wide', 24],
+    ['symmetric', 22],
+    ['tall', 14],
+  ],
+  [
+    ['blob', 32],
+    ['wide', 22],
+    ['tall', 16],
+    ['symmetric', 16],
+    ['template', 14],
+  ],
 ];
 
 /** Скелеты силуэтов: из них форма доращивается до нужного размера. */
@@ -127,7 +150,7 @@ function isConnectedWithout(body: readonly Coord[], skip: number): boolean {
 /** Симметричная форма: строим половину и зеркалим — так рождаются арки и кресты. */
 function symmetricShape(rng: Rng, size: number): Coord[] | null {
   const half = Math.ceil(size / 2);
-  const grown = growPolyomino(rng, { size: half, boxW: 2, boxH: 6 });
+  const grown = growPolyomino(rng, { size: half, boxW: rng.int(2) + 2, boxH: 6 });
   if (!grown) return null;
   const width = Math.max(...grown.map((c) => c.x));
   const seen = new Set<string>();
@@ -153,21 +176,22 @@ function symmetricShape(rng: Rng, size: number): Coord[] | null {
  * непригодные варианты отсеиваются валидатором блока уровнем выше.
  */
 export function growShape(rng: Rng, params: ShapeParams): Coord[] | null {
+  const weights = STAGE_WEIGHTS[Math.min(params.shapeStage ?? 2, STAGE_WEIGHTS.length - 1)];
   const style = rng.weighted(
-    STYLE_WEIGHTS.map(([name]) => name),
-    STYLE_WEIGHTS.map(([, weight]) => weight),
+    weights.map(([name]) => name),
+    weights.map(([, weight]) => weight),
   );
 
   switch (style) {
     case 'tall':
       return growPolyomino(rng, { size: params.size, boxW: rng.int(2) + 3, boxH: 6 });
     case 'wide':
-      return growPolyomino(rng, { size: params.size, boxW: 6, boxH: 3 });
+      return growPolyomino(rng, { size: params.size, boxW: 7, boxH: rng.int(2) + 3 });
     case 'symmetric':
       return symmetricShape(rng, params.size);
     case 'template': {
       const seed = orient(rng, fromRows(rng.pick(SKELETONS)));
-      return growFrom(rng, seed, params.size, 5, 6);
+      return growFrom(rng, seed, params.size, 6, 6);
     }
     default:
       return growPolyomino(rng, params);
