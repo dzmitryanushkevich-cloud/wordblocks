@@ -35,7 +35,8 @@ const result = await build({
   target: ['es2020'],
   jsx: 'automatic',
   define: { 'process.env.NODE_ENV': '"production"', __BUILD__: JSON.stringify(stamp) },
-  loader: { '.json': 'json' },
+  // Звуки уезжают в сборку строкой data: — игра остаётся одним файлом.
+  loader: { '.json': 'json', '.mp3': 'dataurl' },
   write: false,
   logLevel: 'warning',
 });

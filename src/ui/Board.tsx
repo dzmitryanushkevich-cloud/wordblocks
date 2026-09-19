@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import type { Figure } from '../core/types.js';
 import { outlinePath } from './outline.js';
+import { primeSound } from './audio.js';
 
 const GAP = 6;
 /**
@@ -22,26 +23,31 @@ const BOTTOM_AIR = BLEED + 12;
    поэтому на маленьком экране высокий блок всё же ужимается. */
 const MIN_CELL = 26;
 const MAX_CELL = 82;
-/** Кегль буквы в клетке: от него же считается ядро клетки, см. CORE. */
+/** Кегль буквы в клетке: от него же считается полоса хода, см. CORE. */
 const LETTER = 0.46;
 /**
- * Ядро клетки: круг в её середине размером чуть больше самой буквы (доля от шага
- * сетки). Первое касание ловится всей клеткой — игрок ставит палец осознанно и
- * в одну точку, — а дальше по пути засчитывается только ядро. Клетки стоят
- * вплотную, и на всю ширину они ловят палец краем: ведя пальцем наискось, его
- * почти невозможно не пронести через чужую клетку, и в слово лезла буква,
- * которую никто не выбирал. Между ядрами остаётся мёртвая полоса, и промах по
- * ней ничего не стоит — клетка засчитается следующей точкой пути, тогда как
- * лишняя буква портит слово целиком и рвёт цепочку: следующая клетка ей уже
- * не соседняя. Круг, а не квадрат: угол чужой клетки в круг не попадает,
- * а прямой путь по ряду идёт ровно через середину.
+ * Ширина полосы, по которой палец ведёт слово, — доля от шага сетки, примерно
+ * с саму букву. Первое касание ловится всей клеткой: игрок ставит палец
+ * осознанно и в одну точку. Дальше клетка засчитывается, только если палец
+ * прошёл через неё близко к середине — но близко поперёк хода, а не во все
+ * стороны.
  *
- * Ровно по букве (LETTER) ядро делать нельзя: при таком ядре свайп, идущий
- * с постоянным сносом в треть клетки, не засчитывал вообще ничего. Запас
- * в одну десятую держит косой свайп и всё ещё оставляет мёртвую полосу
- * примерно в пятую часть клетки.
+ * Разница принципиальная. Клетки стоят вплотную, и на всю ширину они ловят
+ * палец краем: ведя вдоль ряда, его почти невозможно не занести на соседний
+ * ряд, и в слово лезла буква, которую никто не выбирал. Круглое же ядро режет
+ * и то, ради чего свайп делается: на быстром махе браузер отдаёт движение
+ * редкими точками, палец пролетает клетку насквозь, в середину не попадает —
+ * и слово обрывается на второй букве.
+ *
+ * Полоса вдоль хода решает оба: вперёд она открыта на всю клетку, поперёк —
+ * узкая. Клетка по пути засчитывается, едва палец в неё вошёл; клетка сбоку
+ * требует зайти в неё глубоко, а не задеть краем.
  */
 const CORE = LETTER + 0.1;
+/** Толщина обводки у заливки выделения. Столько же стоит в css у `.lit path`. */
+const LIT_STROKE = 10;
+/** Сколько выезжает голова заливки. Дольше — заливка отстаёт от пальца. */
+const CROWN_MS = 130;
 
 /** Псевдослучайное, но стабильное число из индекса: одна и та же фигура рассыпается одинаково. */
 function jitter(seed: number): number {
@@ -208,6 +214,13 @@ export function Board({ figure, selection, hintCells, crumbling, taken, departed
   const reported = useRef<number | undefined>(undefined);
   /** Рамка поля на время одного свайпа: см. cellAt. */
   const frame = useRef<DOMRect | null>(null);
+  /** Куда идёт палец: вдоль этого направления клетка открыта целиком. */
+  const heading = useRef<{ ux: number; uy: number } | null>(null);
+  /** Плашка последней залитой клетки: её и разгоняем в новую клетку. */
+  const crownRef = useRef<HTMLDivElement>(null);
+  const growth = useRef<Animation | null>(null);
+  /** Сколько клеток было залито в прошлый раз: по нему видно, назад пошёл палец или вперёд. */
+  const grown = useRef(0);
   const [box, setBox] = useState({ width: 0, height: 0, cell: 0, gap: GAP });
 
   /**
@@ -281,7 +294,12 @@ export function Board({ figure, selection, hintCells, crumbling, taken, departed
    * принадлежит никакой клетке, и между соседями остаётся мёртвая полоса.
    */
   const cellAt = useCallback(
-    (clientX: number, clientY: number, strict = false): number | undefined => {
+    (
+      clientX: number,
+      clientY: number,
+      /** Куда идёт палец (единичный вектор). Без него клетка ловится целиком. */
+      heading?: { ux: number; uy: number },
+    ): number | undefined => {
       const node = ref.current;
       if (!node) return undefined;
       // Рамку поля берём ту, что запомнили в момент касания. Свайп спрашивает
@@ -294,10 +312,13 @@ export function Board({ figure, selection, hintCells, crumbling, taken, departed
       const fy = ((clientY - rect.top) / rect.height) * figure.height;
       const x = Math.floor(fx);
       const y = Math.floor(fy);
-      if (strict) {
+      if (heading) {
+        // Насколько палец отклонился от середины клетки поперёк своего хода.
+        // Вдоль хода не смотрим вовсе: там клетка открыта целиком.
         const dx = fx - x - 0.5;
         const dy = fy - y - 0.5;
-        if (dx * dx + dy * dy > (CORE / 2) * (CORE / 2)) return undefined;
+        const across = Math.abs(dx * -heading.uy + dy * heading.ux);
+        if (across > CORE / 2) return undefined;
       }
       return index.get(`${x},${y}`);
     },
@@ -313,19 +334,80 @@ export function Board({ figure, selection, hintCells, crumbling, taken, departed
     const from = trail.current ?? point;
     const dx = point.x - from.x;
     const dy = point.y - from.y;
-    const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / Math.max(4, (box.cell + box.gap) / 4)));
+    const span = Math.hypot(dx, dy);
+    // Ход пальца на этом отрезке. Совсем короткий отрезок направления не задаёт —
+    // берём прошлый, иначе полоса встанет поперёк движения.
+    if (span > 1) heading.current = { ux: dx / span, uy: dy / span };
+    const steps = Math.max(1, Math.ceil(span / Math.max(4, (box.cell + box.gap) / 4)));
     for (let i = 1; i <= steps; i++) {
-      const cell = cellAt(from.x + (dx * i) / steps, from.y + (dy * i) / steps, true);
+      const cell = cellAt(
+        from.x + (dx * i) / steps,
+        from.y + (dy * i) / steps,
+        heading.current ?? undefined,
+      );
       if (cell === undefined) continue;
       // Палец идёт внутри одной клетки десятком точек подряд. Дёргать состояние
       // партии на каждую незачем: выделение всё равно отбросит повтор, но React
       // успеет прогнать проверку по всему дереву. Повтор отсекаем здесь.
-      if (cell === reported.current) continue;
+      const last = reported.current;
+      if (cell === last) continue;
       reported.current = cell;
+      if (last !== undefined && !touching(last, cell)) {
+        // Через клетку перескочили — достраиваем пропуск, иначе слово оборвётся.
+        for (const step of bridgeTo(last, cell)) onPick(step);
+        continue;
+      }
       onPick(cell);
     }
     trail.current = point;
   };
+
+  /** Соседние ли клетки: только по стороне, диагональ соседством не считается. */
+  const touching = useCallback(
+    (a: number, b: number): boolean => {
+      const one = figure.cells[a];
+      const two = figure.cells[b];
+      return Math.abs(one.x - two.x) + Math.abs(one.y - two.y) === 1;
+    },
+    [figure],
+  );
+
+  /**
+   * Клетки между двумя точками пути, когда палец перескочил через них.
+   *
+   * Быстрый мах браузер отдаёт редкими точками, и отрезок между двумя такими
+   * точками — хорда, а не дуга, по которой шёл палец: ядро клетки посередине она
+   * не задевает. Одна пропущенная клетка раньше убивала весь свайп — следующая
+   * ей уже не соседняя, и слово обрывалось на второй букве. Поэтому пропуск
+   * достраивается по сетке: идём от прошлой клетки к новой кратчайшим путём,
+   * без обходов дырок, и не дальше четырёх шагов — дальше это уже не мах,
+   * а палец, ушедший с блока и вернувшийся в другом месте.
+   */
+  const bridgeTo = useCallback(
+    (from: number, to: number): number[] => {
+      const target = figure.cells[to];
+      let { x, y } = figure.cells[from];
+      const steps: number[] = [];
+      while (x !== target.x || y !== target.y) {
+        if (steps.length >= 4) return [];
+        const dx = Math.sign(target.x - x);
+        const dy = Math.sign(target.y - y);
+        const byX = dx !== 0 ? index.get(`${x + dx},${y}`) : undefined;
+        const byY = dy !== 0 ? index.get(`${x},${y + dy}`) : undefined;
+        // Сначала та ось, где идти дальше: так достроенный путь повторяет мах,
+        // а не рисует лесенку.
+        const next = Math.abs(target.x - x) >= Math.abs(target.y - y)
+          ? byX ?? byY
+          : byY ?? byX;
+        if (next === undefined) return [];
+        x = figure.cells[next].x;
+        y = figure.cells[next].y;
+        steps.push(next);
+      }
+      return steps;
+    },
+    [figure, index],
+  );
 
   const release = (): void => {
     trail.current = null;
@@ -344,14 +426,19 @@ export function Board({ figure, selection, hintCells, crumbling, taken, departed
 
   const handleDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (crumbling) return;
+    // Звук браузер разрешает заводить только из касания — вот оно.
+    primeSound();
     ref.current?.setPointerCapture(event.pointerId);
     frame.current = ref.current?.getBoundingClientRect() ?? null;
     trail.current = { x: event.clientX, y: event.clientY };
     reported.current = undefined;
+    heading.current = null;
     // Первая буква ловится всей клеткой: игрок ставит палец осознанно и в одну
     // точку, промахнуться мимо ядра тут было бы обидно на ровном месте.
     const cell = cellAt(event.clientX, event.clientY);
-    if (cell !== undefined) onPick(cell);
+    if (cell === undefined) return;
+    reported.current = cell;
+    onPick(cell);
   };
 
   /*
@@ -450,17 +537,92 @@ export function Board({ figure, selection, hintCells, crumbling, taken, departed
   // забирает свою клетку с собой: плашка тает по кусочку, а не гаснет целиком
   // и не раскалывается вся разом — иначе на её месте видны швы и дыры.
   const frozen = crumbling ? taken.slice(departed) : [];
-  const lit = selection.length > 0 ? selection : frozen;
+  const picking = selection.length > 0;
+  /*
+   * Заливка растёт за пальцем. Общий контур рисуется по всем клеткам, кроме
+   * последней, а последняя — отдельной плашкой, которая выезжает из предыдущей.
+   * Разделение нужно именно для этого: форму пути между двумя наборами клеток
+   * не проанимируешь, а выезд плашки — это одно преобразование, которое браузер
+   * считает на композиторе и главный поток не трогает вовсе.
+   *
+   * Пока блок осыпается, головы нет: слово уже собрано и просто горит целиком.
+   */
+  const body = picking ? selection.slice(0, -1) : frozen;
+  const head = picking ? selection[selection.length - 1] : undefined;
+  const behind = picking && selection.length > 1 ? selection[selection.length - 2] : undefined;
   const picked =
-    box.cell > 0 && lit.length > 0
+    box.cell > 0 && body.length > 0
       ? outlinePath(
-          lit.map((i) => figure.cells[i]),
+          body.map((i) => figure.cells[i]),
           pitch,
           pitch,
           -box.gap / 2,
           -box.gap / 2,
         )
       : '';
+
+  /*
+   * Плашка последней клетки. Размер и скругление повторяют то, что даёт контуру
+   * его обводка: она расширяет многоугольник на половину своей толщины и на
+   * столько же скругляет углы — иначе голова не сойдётся с телом заливки.
+   * Хвост уходит назад, в предыдущую клетку: без него на стыке двух скруглённых
+   * углов остаётся щербинка.
+   */
+  const crown = (() => {
+    if (head === undefined || box.cell <= 0) return null;
+    const cell = figure.cells[head];
+    const edge = LIT_STROKE / 2;
+    const tail = pitch * 0.6;
+    let left = cell.x * pitch - box.gap / 2 - edge;
+    let top = cell.y * pitch - box.gap / 2 - edge;
+    let width = pitch + LIT_STROKE;
+    let height = pitch + LIT_STROKE;
+    let origin = '50% 50%';
+    let axis: 'x' | 'y' | null = null;
+    if (behind !== undefined) {
+      const from = figure.cells[behind];
+      if (cell.x > from.x) { left -= tail; width += tail; origin = '0% 50%'; axis = 'x'; }
+      else if (cell.x < from.x) { width += tail; origin = '100% 50%'; axis = 'x'; }
+      else if (cell.y > from.y) { top -= tail; height += tail; origin = '50% 0%'; axis = 'y'; }
+      else if (cell.y < from.y) { height += tail; origin = '50% 100%'; axis = 'y'; }
+    }
+    // Стартовая доля: плашка начинается ровно там, где кончается уже залитое,
+    // поэтому в первый кадр из-под тела ничего не торчит.
+    const along = axis === 'x' ? width : height;
+    return { head, left, top, width, height, origin, axis, from: (tail + LIT_STROKE) / along };
+  })();
+
+  /*
+   * Выезд головы. Числами через `animate`, а не классом в css: у каждой клетки
+   * своя стартовая доля, а кадры с переменными css браузер считает на главном
+   * потоке каждый кадр. Здесь же едет одно преобразование — это композитор,
+   * и на телефоне выезд ничего не стоит.
+   */
+  const crownKey = crown?.head;
+  const crownAxis = crown?.axis ?? null;
+  const crownFrom = crown?.from ?? 0;
+  const litCount = selection.length;
+  useLayoutEffect(() => {
+    const node = crownRef.current;
+    const before = grown.current;
+    grown.current = litCount;
+    if (!node || crownKey === undefined || typeof node.animate !== 'function') return;
+    // Плашка одна на весь свайп, поэтому прошлый выезд снимаем: буквы идут
+    // чаще, чем он успевает доиграть, и они копились бы на одном элементе.
+    growth.current?.cancel();
+    // Палец пошёл назад и снимает буквы — тут разгонять нечего. Клетка, в
+    // которую заливка «въезжала бы», уже залита, и выезд на ней читается
+    // дёрганьем: плашка каждый раз прыгает назад и наезжает заново.
+    if (litCount <= before) return;
+    const grow = crownAxis === 'x' ? 'scaleX' : crownAxis === 'y' ? 'scaleY' : null;
+    growth.current = node.animate(
+      grow
+        ? [{ transform: `${grow}(${crownFrom})` }, { transform: `${grow}(1)` }]
+        : // Первая буква слова: расти неоткуда, поэтому плашка всходит на месте.
+          [{ transform: 'scale(0.55)', opacity: 0.2 }, { transform: 'scale(1)', opacity: 1 }],
+      { duration: CROWN_MS, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)', fill: 'backwards' },
+    );
+  }, [crownKey, crownAxis, crownFrom, litCount]);
 
   return (
     <div
@@ -490,6 +652,22 @@ export function Board({ figure, selection, hintCells, crumbling, taken, departed
         >
           <path d={picked} />
         </svg>
+      )}
+
+      {/* Голова заливки: она и выезжает за пальцем в новую клетку. */}
+      {crown && (
+        <div
+          ref={crownRef}
+          className="lit-head"
+          style={{
+            left: crown.left,
+            top: crown.top,
+            width: crown.width,
+            height: crown.height,
+            borderRadius: LIT_STROKE / 2,
+            transformOrigin: crown.origin,
+          }}
+        />
       )}
 
       {/* Вспышка по контуру собранного слова: разбегается наружу и рассеивается. */}

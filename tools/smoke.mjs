@@ -75,12 +75,46 @@ function pathFor(cells, word) {
   return null;
 }
 
-async function swipe(cells, path) {
-  await page.mouse.move(cells[path[0]].cx, cells[path[0]].cy);
-  await page.mouse.down();
-  for (const i of path.slice(1)) {
-    await page.mouse.move(cells[i].cx, cells[i].cy, { steps: 4 });
+/**
+ * Свайп ведём так, как ведёт живой палец на телефоне: углы срезаны плавной
+ * дугой, а точек мало — на быстром махе браузер отдаёт движение редкими
+ * кадрами. Раньше тест водил палец строго по ломаной через середины клеток
+ * и поэтому не замечал, что быстрый мах теряет буквы: слово обрывалось
+ * на второй.
+ */
+function fingerPath(cells, path, count = 10) {
+  let points = [];
+  for (let i = 1; i < path.length; i++) {
+    const from = cells[path[i - 1]], to = cells[path[i]];
+    for (let k = 0; k < 12; k++) {
+      const f = k / 12;
+      points.push({ x: from.cx + (to.cx - from.cx) * f, y: from.cy + (to.cy - from.cy) * f });
+    }
   }
+  points.push({ x: cells[path[path.length - 1]].cx, y: cells[path[path.length - 1]].cy });
+  // Сглаживание срезает углы: так же срезает их палец, не останавливаясь в клетке.
+  for (let pass = 0; pass < 14; pass++) {
+    const next = [points[0]];
+    for (let i = 1; i < points.length - 1; i++)
+      next.push({
+        x: (points[i - 1].x + points[i].x * 2 + points[i + 1].x) / 4,
+        y: (points[i - 1].y + points[i].y * 2 + points[i + 1].y) / 4,
+      });
+    next.push(points[points.length - 1]);
+    points = next;
+  }
+  // Из всей дуги берём десяток точек: примерно столько успевает прийти за мах.
+  const sparse = [];
+  for (let i = 0; i < count; i++)
+    sparse.push(points[Math.round((i * (points.length - 1)) / (count - 1))]);
+  return sparse;
+}
+
+async function swipe(cells, path) {
+  const points = fingerPath(cells, path);
+  await page.mouse.move(points[0].x, points[0].y);
+  await page.mouse.down();
+  for (const point of points.slice(1)) await page.mouse.move(point.x, point.y);
   await page.mouse.up();
 }
 
@@ -186,6 +220,35 @@ const wide = await page.evaluate(() => {
 });
 assert.equal(wide.left, restLeft, 'длинное слово не должно сдвигать блок');
 assert.ok(wide.over <= 0, `длинное слово не должно вылезать за экран, вылезло на ${wide.over}px`);
+
+// 1.4. Заливка выезжает только вперёд. Когда палец идёт назад и снимает буквы,
+// разгонять её некуда: клетка, в которую она «въезжала бы», уже залита, и выезд
+// на ней читался дёрганьем — плашка прыгала назад и наезжала заново.
+const wave = (() => {
+  const at = new Map(cells.map((c, i) => [`${c.gx},${c.gy}`, i]));
+  for (let i = 0; i < cells.length; i++) {
+    for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+      const next = at.get(`${cells[i].gx + dx},${cells[i].gy + dy}`);
+      if (next !== undefined) return [i, next];
+    }
+  }
+  return null;
+})();
+if (wave) {
+  const running = () => page.evaluate(
+    () => document.querySelector('.lit-head')?.getAnimations().filter((a) => a.playState === 'running').length ?? -1,
+  );
+  await page.mouse.move(cells[wave[0]].cx, cells[wave[0]].cy);
+  await page.mouse.down();
+  await page.mouse.move(cells[wave[1]].cx, cells[wave[1]].cy, { steps: 4 });
+  assert.ok((await running()) > 0, 'вперёд заливка обязана выезжать');
+  await page.waitForTimeout(220);
+  await page.mouse.move(cells[wave[0]].cx, cells[wave[0]].cy, { steps: 4 });
+  assert.equal(await running(), 0, 'назад заливка не должна разгоняться');
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  assert.ok((await progress()).startsWith('0 /'), 'проверочный возврат ничего не засчитывает');
+}
 
 // 1.5. Слово не из темы: блок стоит, а слово уходит в копилку.
 await page.click('.debug-toggle');
@@ -300,6 +363,36 @@ await page.waitForSelector('.levels');
 await shot('07-map-after');
 const unlocked = await page.evaluate(() => JSON.parse(localStorage.getItem('wordblocks.save.ru.v1') ?? '{}'));
 
+// 6. Быстрый мах на позднем уровне. Там клетки мельче, слова длиннее и путь
+// с поворотами — именно на них свайп терял буквы: пропущенная клетка рвёт
+// цепочку, следующая ей уже не соседняя, и слово обрывалось на второй букве.
+// Палец ведём как живой: углы срезаны, точек мало — на быстром махе браузер
+// отдаёт движение редкими кадрами.
+await page.evaluate(() => localStorage.setItem('wordblocks.save.ru.v1',
+  JSON.stringify({ unlocked: 12, coins: 500, chest: 0, results: {}, bonus: [] })));
+await page.reload();
+await page.waitForSelector('.board');
+await settleBoard();
+const lateWord = await anchorWord();
+const lateCells = await tiles();
+const latePath = pathFor(lateCells, lateWord);
+assert.ok(latePath, `на позднем уровне не нашёлся путь для ${lateWord.toUpperCase()}`);
+const lateFinger = fingerPath(lateCells, latePath, 8);
+await page.mouse.move(lateFinger[0].x, lateFinger[0].y);
+await page.mouse.down();
+for (const point of lateFinger.slice(1)) await page.mouse.move(point.x, point.y);
+const lateDraft = await page.evaluate(
+  () => document.querySelector('.draft')?.textContent.trim().toLowerCase() ?? '',
+);
+await page.mouse.up();
+await page.waitForTimeout(400);
+assert.equal(
+  lateDraft,
+  lateWord,
+  `быстрый мах не должен терять буквы, набралось «${lateDraft.toUpperCase()}» вместо «${lateWord.toUpperCase()}»`,
+);
+
+console.log('быстрый мах на позднем уровне:', lateDraft.toUpperCase());
 console.log('итог уровня:', title);
 console.log('сохранение:', JSON.stringify(unlocked));
 console.log('ошибки консоли:', errors.length ? errors : 'нет');

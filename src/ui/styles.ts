@@ -182,7 +182,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 }
 .wallet { flex: none; white-space: nowrap; }
 /* Узкий телефон: ужимается всё, кроме значков, — им ужиматься уже некуда. */
-@media (max-width: 400px) {
+@media (max-width: 430px) {
   .hud { padding: 14px 10px 0; }
   .top-row { gap: 6px; }
   .top-row .ghost { width: 36px; height: 36px; border-radius: 12px; }
@@ -190,8 +190,21 @@ button:disabled { opacity: 0.45; cursor: default; }
   .level-name { font-size: 16px; padding: 0 2px; }
   .wallet { font-size: 17px; padding-right: 12px; gap: 5px; }
 }
+/* Самый узкий телефон: четыре значка и кошелёк не оставляют подписи места
+   вовсе, поэтому значки ужимаются ещё. */
+@media (max-width: 345px) {
+  .top-row { gap: 4px; }
+  .top-row .ghost { width: 32px; height: 32px; border-radius: 10px; }
+  .top-row .ghost svg.glyph { width: 18px; height: 18px; }
+  .level-name { font-size: 15px; padding: 0; }
+  .wallet { font-size: 16px; padding-right: 10px; }
+}
 /* Ниже этой ширины «Уровень» уже не влезает между значками и кошельком. */
-@media (max-width: 370px) {
+/* Полная подпись «Уровень 3» перестала влезать, когда в шапке появился
+   четвёртый значок — звук. Порог поэтому сдвинут: на телефоне стоит короткая
+   форма, полная остаётся планшету и десктопу. Когда жук отладки уйдёт из
+   релизной сборки, место освободится и порог можно опустить назад. */
+@media (max-width: 470px) {
   .level-name .long { display: none; }
   .level-name .short { display: inline; }
 }
@@ -874,6 +887,17 @@ button:disabled { opacity: 0.45; cursor: default; }
   pointer-events: none;
 }
 /* Собранное слово перестаёт быть «выделением» и становится белой деталью. */
+/* Голова заливки: последняя залитая клетка, которая выезжает за пальцем.
+   Лежит на том же слое, что и контур заливки, — буквы рисуются поверх. */
+.board .lit-head {
+  position: absolute;
+  z-index: 2;
+  background: var(--fill);
+  pointer-events: none;
+  /* Слой держится на весь свайп: плашка одна и та же от буквы к букве, и её
+     не нужно каждый раз заново поднимать на композитор и опускать обратно. */
+  will-change: transform;
+}
 .board .lit.won path { animation: lit-white 0.45s ease-out forwards; }
 @keyframes lit-white {
   to { fill: var(--tile); stroke: var(--tile); }
@@ -940,7 +964,7 @@ button:disabled { opacity: 0.45; cursor: default; }
 .board .lit path {
   fill: var(--fill);
   stroke: var(--fill);
-  stroke-width: 13;
+  stroke-width: 10;
   stroke-linejoin: round;
   paint-order: stroke;
 }
@@ -963,6 +987,7 @@ button:disabled { opacity: 0.45; cursor: default; }
   transition: background 0.12s ease, box-shadow 0.12s ease;
 }
 .tile.hinted { box-shadow: inset 0 0 0 3px var(--fill); }
+}
 
 /*
  * Кусочек летит одним элементом и одним преобразованием. Раньше их было три

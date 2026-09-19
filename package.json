@@ -9,7 +9,8 @@
     "test": "vitest run",
     "smoke": "node tools/smoke.mjs",
     "typecheck": "tsc --noEmit",
-    "audit": "tsx tools/audit.ts"
+    "audit": "tsx tools/audit.ts",
+    "sounds": "node tools/sounds.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.20.3",

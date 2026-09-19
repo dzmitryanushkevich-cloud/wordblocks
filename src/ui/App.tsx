@@ -28,6 +28,7 @@ import { outlinePath } from './outline.js';
 import { Hud, type Flight } from './Hud.js';
 import { Debug } from './Debug.js';
 import { Backdrop } from './Backdrop.js';
+import { playTone, playWin } from './audio.js';
 import { HintButton, Queue } from './Queue.js';
 import { Coin, Confetti, Stars } from './Coin.js';
 import { ChestBar } from './Chest.js';
@@ -162,6 +163,22 @@ export function App() {
     [figure, game?.phase, onLose, resetProgress],
   );
 
+  /*
+   * Тон на каждую букву. Тоны идут по возрастанию, поэтому длинное слово
+   * звучит гаммой, а шаг назад — тем же тоном ступенью ниже: слышно, что буква
+   * снята. Следим за длиной выделения, а не за самим нажатием: нажатие часто
+   * не проходит (клетка не соседняя, повтор), и звучал бы тон там, где ничего
+   * не произошло.
+   */
+  const litLength = game?.selection.length ?? 0;
+  const heard = useRef(0);
+  useEffect(() => {
+    const before = heard.current;
+    heard.current = litLength;
+    if (litLength === 0 || litLength === before) return;
+    playTone(litLength - 1);
+  }, [litLength]);
+
   // Уровень проигран — считаем, поможет ли ещё один блок. Лучшее, что он может
   // дать, — длина его якоря; если и с ней до цели не дотянуться, предлагать
   // нечего, и кнопки не будет.
@@ -254,6 +271,7 @@ export function App() {
       if (!current) return current;
       const result = releaseSelection(current, dictionary);
       if (result.accepted) {
+        playWin();
         setFlight(null);
         setDeparted(0);
         setRejected(null);
@@ -269,6 +287,9 @@ export function App() {
         });
         setTimeout(() => setRejected(null), REJECT_MS);
         if (result.status === 'off-theme' && !known) {
+          // Находка не из темы тоже награда, но вполовину тише: блок она
+          // не рассыпает, и путать её с настоящей победой нельзя.
+          playWin(0.5);
           setSave((wallet) => collectBonus(pack.id, wallet, result.word).save);
           // Буквы улетают в звезду: находка должна дойти до копилки на глазах.
           setBonusFlight({ word: result.word, points, size, gap: GAP });

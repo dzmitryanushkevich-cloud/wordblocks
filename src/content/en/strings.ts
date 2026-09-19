@@ -20,6 +20,8 @@ export const en: UiStrings = {
   fullscreen: 'Full screen',
   fullscreenExit: 'Exit',
   fullscreenTitle: 'play full screen',
+  soundOff: 'turn the sound off',
+  soundOn: 'turn the sound on',
   hint: 'Hint',
   hintTitle: 'light up the first letter of the long word',
   tutorHint: 'Connect letters into a word',

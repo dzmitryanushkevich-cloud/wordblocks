@@ -27,6 +27,8 @@ export const ru: UiStrings = {
   fullscreen: 'Весь экран',
   fullscreenExit: 'Свернуть',
   fullscreenTitle: 'развернуть игру во весь экран',
+  soundOff: 'выключить звук',
+  soundOn: 'включить звук',
   hint: 'Подсказка',
   hintTitle: 'подсветить первую букву длинного слова',
   tutorHint: 'Соедините буквы в слово',

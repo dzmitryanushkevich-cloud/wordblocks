@@ -125,6 +125,9 @@ export interface UiStrings {
   fullscreen: string;
   fullscreenExit: string;
   fullscreenTitle: string;
+  /** Кнопка звука: что она сделает по нажатию. */
+  soundOff: string;
+  soundOn: string;
   hint: string;
   hintTitle: string;
   /** Подсказка новичку на первом уровне: стоит там же, где собираемое слово. */

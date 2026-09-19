@@ -1,6 +1,7 @@
 import { memo, type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 import type { FoundEntry } from '../game/engine.js';
 import { Fullscreen } from './Fullscreen.js';
+import { Sound } from './Sound.js';
 import { useUi } from './content.js';
 import { Coin } from './Coin.js';
 
@@ -68,6 +69,7 @@ function HudInner({
         </button>
         {debug}
         <Fullscreen />
+        <Sound />
         {/* Подпись уровня занимает весь промежуток между значками и кошельком
             и встаёт в нём по центру: игрок должен видеть, где он находится. */}
         <div className="level-name">
